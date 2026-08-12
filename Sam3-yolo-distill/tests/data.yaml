@@ -1,0 +1,10 @@
+path: /data/ultralytics/Sam3-yolo-distill/tests/data
+
+train: images/train
+
+val: images/val
+
+
+names:
+
+  0: carpet
