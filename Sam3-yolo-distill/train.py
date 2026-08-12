@@ -6,19 +6,21 @@ SAM3 -> YOLOv8-seg Distillation Training
 Pipeline:
 
 Dataset
-    |
+|
 DataLoader
-    |
+|
 DistillTrainer
-    |
+|
 SAM3 Teacher
-    |
+|
 YOLO Student
-    |
+|
 Loss
-    |
+|
 Backward
-    |
+|
+Validation
+|
 Checkpoint
 
 """
@@ -27,12 +29,17 @@ Checkpoint
 import os
 import torch
 
+
 from torch.utils.data import DataLoader
 
 
 from train_distill import create_trainer
 
+
 from datasets.yolo_dataset import YOLODataset
+
+
+from validation.evaluator import DistillEvaluator
 
 
 from utils.checkpoint import (
@@ -47,22 +54,39 @@ from utils.checkpoint import (
 # =====================================================
 
 
-IMAGE_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/images/train"
+DEVICE = "cuda"
+
+
+
+TRAIN_IMAGE_DIR = (
+"/data/ultralytics/"
+"Sam3-yolo-distill/tests/data/images/train"
 )
 
 
-LABEL_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/labels/train"
+TRAIN_LABEL_DIR = (
+"/data/ultralytics/"
+"Sam3-yolo-distill/tests/data/labels/train"
+)
+
+
+
+VAL_IMAGE_DIR = (
+"/data/ultralytics/"
+"Sam3-yolo-distill/tests/data/images/val"
+)
+
+
+VAL_LABEL_DIR = (
+"/data/ultralytics/"
+"Sam3-yolo-distill/tests/data/labels/val"
 )
 
 
 
 CHECKPOINT_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/weights/checkpoints"
+"/data/ultralytics/"
+"Sam3-yolo-distill/weights/checkpoints"
 )
 
 
@@ -74,18 +98,18 @@ os.makedirs(
 
 
 
-# 是否恢复训练
+# =====================================================
+# resume
+# =====================================================
+
 
 RESUME = None
 
 
-# 例如：
+# example:
 #
-# RESUME = (
-# "/data/ultralytics/"
-# "Sam3-yolo-distill/weights/checkpoints/last.pt"
-# )
-
+# RESUME =
+# "/data/ultralytics/Sam3-yolo-distill/weights/checkpoints/last.pt"
 
 
 
@@ -101,6 +125,7 @@ def main():
     # create trainer
     # =================================================
 
+
     print("================")
     print("create trainer")
 
@@ -115,11 +140,12 @@ def main():
 
 
     # =================================================
-    # resume
+    # resume checkpoint
     # =================================================
 
 
     start_epoch = 0
+
 
 
     if RESUME is not None:
@@ -140,21 +166,60 @@ def main():
         )
 
 
+        print(
+            "resume from epoch:",
+            start_epoch
+        )
+
+
 
     # =================================================
-    # dataset
+    # evaluator
     # =================================================
 
 
     print("================")
-    print("create dataset")
+    print("create evaluator")
 
 
-    dataset = YOLODataset(
+    evaluator = DistillEvaluator(
 
-        image_dir=IMAGE_DIR,
+        trainer.teacher,
 
-        label_dir=LABEL_DIR,
+        trainer.student,
+
+        trainer.adapters,
+
+        trainer.feature_loss,
+
+        trainer.yolo_hook,
+
+        device=DEVICE
+
+    )
+
+
+    print(
+        "evaluator ready"
+    )
+
+
+
+    # =================================================
+    # train dataset
+    # =================================================
+
+
+    print("================")
+    print("create train dataset")
+
+
+
+    train_dataset = YOLODataset(
+
+        image_dir=TRAIN_IMAGE_DIR,
+
+        label_dir=TRAIN_LABEL_DIR,
 
         img_size=640
 
@@ -162,9 +227,9 @@ def main():
 
 
 
-    loader = DataLoader(
+    train_loader = DataLoader(
 
-        dataset,
+        train_dataset,
 
         batch_size=8,
 
@@ -174,37 +239,86 @@ def main():
 
         pin_memory=True,
 
-        collate_fn=dataset.collate_fn
+        collate_fn=train_dataset.collate_fn
 
     )
 
 
 
     print(
-        "dataset:",
-        len(dataset)
-    )
-
-
-    print(
-        "batches:",
-        len(loader)
+        "train dataset:",
+        len(train_dataset)
     )
 
 
 
     # =================================================
-    # training
+    # validation dataset
+    # =================================================
+
+
+    print("================")
+    print("create val dataset")
+
+
+
+    val_dataset = YOLODataset(
+
+        image_dir=VAL_IMAGE_DIR,
+
+        label_dir=VAL_LABEL_DIR,
+
+        img_size=640
+
+    )
+
+
+
+    val_loader = DataLoader(
+
+        val_dataset,
+
+        batch_size=8,
+
+        shuffle=False,
+
+        num_workers=4,
+
+        pin_memory=True,
+
+        collate_fn=val_dataset.collate_fn
+
+    )
+
+
+
+    print(
+        "val dataset:",
+        len(val_dataset)
+    )
+
+
+
+    # =================================================
+    # training config
     # =================================================
 
 
     epochs = 100
 
 
+    best_val_loss = float("inf")
+
+
 
     print("================")
     print("start training")
 
+
+
+    # =================================================
+    # epoch loop
+    # =================================================
 
 
     for epoch in range(
@@ -220,24 +334,30 @@ def main():
 
 
 
+        trainer.student.train()
+
+        for adapter in trainer.adapters:
+
+            adapter.train()
+
+
+
         epoch_loss = 0
 
 
 
-        for step,batch in enumerate(loader):
+        # ===============================
+        # train
+        # ===============================
 
 
-
-            # ==========================
-            # move cuda
-            # ==========================
+        for step,batch in enumerate(train_loader):
 
 
             for k,v in batch.items():
 
 
                 if torch.is_tensor(v):
-
 
                     batch[k] = v.cuda(
 
@@ -247,20 +367,15 @@ def main():
 
 
 
-            # ==========================
-            # train step
-            # ==========================
-
-
             result = trainer.train_step(
+
                 batch
+
             )
 
 
 
-            epoch_loss += (
-                result["loss"]
-            )
+            epoch_loss += result["loss"]
 
 
 
@@ -279,23 +394,18 @@ def main():
 
 
 
-        # ==========================
-        # epoch loss
-        # ==========================
-
-
         avg_loss = (
 
             epoch_loss /
 
-            len(loader)
+            len(train_loader)
 
         )
 
 
         print(
 
-            "epoch loss:",
+            "train loss:",
 
             avg_loss
 
@@ -303,9 +413,42 @@ def main():
 
 
 
-        # =================================================
-        # save last checkpoint
-        # =================================================
+        # ===============================
+        # validation
+        # ===============================
+
+
+        print("================")
+        print("validation")
+
+
+
+        val_result = evaluator.evaluate(
+
+            val_loader
+
+        )
+
+
+        print(
+
+            val_result
+
+        )
+
+
+
+        current_val_loss = (
+
+            val_result["val_loss"]
+
+        )
+
+
+
+        # ===============================
+        # save last
+        # ===============================
 
 
         last_path = os.path.join(
@@ -332,15 +475,89 @@ def main():
 
             trainer.scaler,
 
-            avg_loss
+            {
+
+                "train_loss":
+                avg_loss,
+
+                "val":
+                val_result
+
+            }
 
         )
 
 
 
-        # =================================================
-        # save periodic checkpoint
-        # =================================================
+        print(
+            "saved last checkpoint"
+        )
+
+
+
+        # ===============================
+        # save best
+        # ===============================
+
+
+        if current_val_loss < best_val_loss:
+
+
+            best_val_loss = current_val_loss
+
+
+
+            best_path = os.path.join(
+
+                CHECKPOINT_DIR,
+
+                "best.pt"
+
+            )
+
+
+
+            save_checkpoint(
+
+                best_path,
+
+                epoch,
+
+                trainer.student,
+
+                trainer.adapters,
+
+                trainer.optimizer,
+
+                trainer.scaler,
+
+                {
+
+                    "train_loss":
+                    avg_loss,
+
+                    "val":
+                    val_result
+
+                }
+
+            )
+
+
+
+            print(
+
+                "new best model:",
+
+                best_val_loss
+
+            )
+
+
+
+        # ===============================
+        # periodic checkpoint
+        # ===============================
 
 
         if epoch % 10 == 0:
@@ -353,7 +570,6 @@ def main():
                 f"epoch_{epoch}.pt"
 
             )
-
 
 
             save_checkpoint(
@@ -370,7 +586,23 @@ def main():
 
                 trainer.scaler,
 
-                avg_loss
+                {
+
+                    "train_loss":
+                    avg_loss,
+
+                    "val":
+                    val_result
+
+                }
+
+            )
+
+
+            print(
+
+                "saved:",
+                epoch_path
 
             )
 
@@ -383,8 +615,6 @@ def main():
 
 
 
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
 
     main()
