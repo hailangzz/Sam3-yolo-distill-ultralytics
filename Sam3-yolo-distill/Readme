@@ -1,0 +1,700 @@
+现在基于 **Ultralytics 8.3.237 + SAM3 Teacher + YOLOv8-seg Student Feature Distillation** 设计的工程结构如下：
+
+```text
+sam3-yolo-distill/
+
+├── train_distill.py
+│
+├── teacher/
+│   └── sam3_teacher.py
+│
+├── hooks/
+│   └── yolo_hook.py
+│
+├── losses/
+│   └── feature_loss.py
+│
+└── configs/
+    └── distill.yaml
+```
+
+下面逐个解释每个文件的职责，以及它在整个蒸馏流程中的位置。
+
+---
+
+# 1. train_distill.py
+
+## 作用：
+
+**整个特征蒸馏训练的入口文件**
+
+类似普通 YOLO 训练：
+
+```bash
+yolo segment train data=data.yaml model=yolov8s-seg.pt
+```
+
+但是这里变成：
+
+```bash
+python train_distill.py
+```
+
+它负责：
+
+1. 加载 YOLOv8-seg Student
+2. 加载 SAM3 Teacher
+3. 注册 Feature Hook
+4. 创建优化器
+5. 执行训练循环
+6. 计算总 Loss
+
+整体流程：
+
+```text
+train_distill.py
+
+        |
+        |
+        +------------+
+        |            |
+        v            v
+
+     SAM3          YOLOv8-seg
+    Teacher         Student
+
+        |            |
+        |            |
+        v            v
+
+  teacher_feat   student_feat
+
+
+        |
+        |
+        v
+
+ feature_loss.py
+
+
+        |
+        |
+        v
+
+     backward
+
+        |
+        |
+        v
+
+   更新YOLO参数
+```
+
+---
+
+它相当于：
+
+> 蒸馏系统的大脑
+
+---
+
+# 2. teacher/sam3_teacher.py
+
+## 作用：
+
+封装 SAM3。
+
+因为 SAM3 是 Teacher。
+
+训练过程中：
+
+SAM3：
+
+```text
+输入图片
+
+↓
+
+SAM3 Image Encoder
+
+↓
+
+Feature Map
+
+```
+
+例如：
+
+输入：
+
+```python
+image
+
+[B,3,640,640]
+```
+
+输出：
+
+```python
+feature
+
+[B,1024,40,40]
+```
+
+---
+
+这个文件负责：
+
+## (1) 加载SAM3
+
+例如：
+
+```python
+sam3 = SAM3Teacher(model)
+```
+
+---
+
+## (2) 冻结参数
+
+非常重要：
+
+```python
+for p in self.model.parameters():
+    p.requires_grad=False
+```
+
+因为：
+
+SAM3不学习。
+
+它只是老师。
+
+---
+
+## (3) 提取Feature
+
+核心：
+
+```python
+feature = model.image_encoder(image)
+```
+
+输出：
+
+```text
+SAM3知识
+```
+
+传给：
+
+```text
+feature_loss.py
+```
+
+---
+
+简单理解：
+
+```
+sam3_teacher.py
+
+就是：
+
+老师的大脑接口
+```
+
+---
+
+# 3. hooks/yolo_hook.py
+
+## 作用：
+
+从 YOLOv8-seg 中抓取中间层特征。
+
+YOLO网络：
+
+```text
+Input
+
+ |
+ |
+Backbone
+
+ C1
+ |
+ C2
+ |
+ C3
+
+ |
+
+Neck
+
+ |
+ |
+Head
+
+ |
+ |
+Output mask
+```
+
+我们不需要最终输出。
+
+我们需要：
+
+中间特征。
+
+例如：
+
+```python
+YOLO layer 4
+
+输出:
+
+[B,128,80,80]
+```
+
+---
+
+这个文件通过：
+
+```python
+register_forward_hook()
+```
+
+监听网络。
+
+例如：
+
+```python
+layer.register_forward_hook()
+```
+
+当YOLO执行：
+
+```python
+model(image)
+```
+
+自动：
+
+保存：
+
+```python
+features["stage1"]
+```
+
+得到：
+
+```text
+YOLO特征
+```
+
+---
+
+作用：
+
+```
+yolo_hook.py
+
+=
+
+学生知识采集器
+```
+
+---
+
+# 4. losses/feature_loss.py
+
+## 作用：
+
+计算：
+
+Teacher和Student之间的差距。
+
+也就是：
+
+知识迁移。
+
+---
+
+例如：
+
+SAM3:
+
+```text
+teacher feature
+
+[B,1024,40,40]
+```
+
+YOLO:
+
+```text
+student feature
+
+[B,512,40,40]
+```
+
+维度可能不同。
+
+所以：
+
+先处理：
+
+```python
+interpolate()
+```
+
+然后：
+
+计算：
+
+```python
+MSE Loss
+```
+
+公式：
+
+[
+L_{feature}=||F_{SAM3}-F_{YOLO}||^2
+]
+
+代码：
+
+```python
+loss = mse_loss(
+    student,
+    teacher
+)
+```
+
+---
+
+它负责：
+
+```
+老师说：
+
+我的视觉理解是这样
+
+
+学生说：
+
+我理解成这样
+
+
+计算两者差异
+```
+
+---
+
+# 5. configs/distill.yaml
+
+## 作用：
+
+保存训练超参数。
+
+避免把参数写死在代码里面。
+
+例如：
+
+```yaml
+teacher:
+  model: sam3.pt
+
+
+student:
+  model: yolov8s-seg.pt
+
+
+
+distillation:
+
+  feature_layers:
+    - stage1
+    - stage2
+    - stage3
+
+
+  lambda_feature:0.5
+
+
+
+train:
+
+  epochs:200
+
+  imgsz:640
+
+  batch:16
+
+```
+
+---
+
+作用：
+
+以后实验：
+
+例如：
+
+实验1：
+
+```yaml
+lambda_feature:0.1
+```
+
+实验2：
+
+```yaml
+lambda_feature:1.0
+```
+
+不用改代码。
+
+---
+
+# 六、这些文件之间的数据流
+
+完整关系：
+
+```text
+
+                 Image
+                   |
+                   |
+          +--------+---------+
+          |                  |
+          v                  v
+
+
+       SAM3               YOLOv8-seg
+
+       Teacher             Student
+
+
+          |                  |
+          |                  |
+          v                  v
+
+
+ sam3_teacher.py       yolo_hook.py
+
+
+          |                  |
+          |                  |
+          +--------+---------+
+
+                   |
+
+                   v
+
+
+          feature_loss.py
+
+
+                   |
+
+                   v
+
+
+              total loss
+
+
+                   |
+
+                   v
+
+
+             YOLO backward
+
+
+
+```
+
+---
+
+# 七、和你现有项目的关系
+
+你现在已有：
+
+```text
+robot-ai-platform
+
+├── datasets
+│
+├── sam3-annotation-service
+│
+├── cvat
+│
+└── models
+```
+
+新的：
+
+```text
+sam3-yolo-distill
+```
+
+应该放：
+
+```text
+robot-ai-platform/
+
+├── datasets/
+
+├── sam3-annotation-service/
+
+├── ultralytics/
+
+└── sam3-yolo-distill/
+```
+
+关系：
+
+```
+SAM3 Annotation Service
+          |
+          |
+          v
+
+产生高质量YOLO-seg数据
+
+
+          |
+          |
+          v
+
+YOLOv8-seg baseline训练
+
+
+          |
+          |
+          v
+
+SAM3 Feature Distillation
+
+
+          |
+          |
+          v
+
+轻量YOLO部署模型
+
+```
+
+---
+
+# 八、后续我们还需要新增两个关键文件
+
+目前这个结构还是基础版。
+
+真正跑起来还需要：
+
+## 1. distill_trainer.py
+
+作用：
+
+继承：
+
+```python
+ultralytics.engine.trainer
+```
+
+修改：
+
+```python
+loss = yolo_loss + λ*feature_loss
+```
+
+这是核心。
+
+---
+
+## 2. adapters.py
+
+作用：
+
+解决：
+
+SAM3 feature:
+
+```
+1024 channel
+```
+
+YOLO feature:
+
+```
+512 channel
+```
+
+之间的维度转换。
+
+例如：
+
+```python
+Conv1x1
+```
+
+结构：
+
+```
+SAM3 feature
+
+1024
+
+ |
+ |
+1x1 Conv
+
+ |
+
+512
+
+ |
+ |
+MSE Loss
+
+```
+
+---
+
+所以最终完整工程应该演变为：
+
+```text
+sam3-yolo-distill/
+
+├── train_distill.py
+
+├── distill_trainer.py     ⭐核心
+
+├── teacher/
+│   └── sam3_teacher.py
+
+├── hooks/
+│   └── yolo_hook.py
+
+├── losses/
+│   └── feature_loss.py
+
+├── modules/
+│   └── adapters.py
+
+└── configs/
+    └── distill.yaml
+
+```
+
+其中：
+
+**真正决定蒸馏成功与否的是：**
+
+1. `distill_trainer.py`（训练逻辑）
+2. `sam3_teacher.py`（SAM3特征选择）
+3. `yolo_hook.py`（YOLO特征选择）
+
+下一步建议我们直接针对 **Ultralytics 8.3.237源码结构，实现 `distill_trainer.py`，这是整个Feature Distillation的核心。**
