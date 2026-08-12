@@ -8,9 +8,17 @@ SAM3
 
 Student:
 YOLOv8-seg
+
+AMP training enabled
 """
 
+
 import torch
+
+from torch.cuda.amp import (
+    autocast,
+    GradScaler
+)
 
 
 
@@ -53,9 +61,17 @@ class DistillTrainer:
 
 
 
-        # =========================
+        # =====================================
+        # AMP scaler
+        # =====================================
+
+        self.scaler = GradScaler()
+
+
+
+        # =====================================
         # freeze SAM3
-        # =========================
+        # =====================================
 
         self.teacher.eval()
 
@@ -66,9 +82,9 @@ class DistillTrainer:
 
 
 
-        # =========================
+        # =====================================
         # train mode
-        # =========================
+        # =====================================
 
         self.student.train()
 
@@ -90,6 +106,7 @@ class DistillTrainer:
     ):
 
 
+
         self.optimizer.zero_grad()
 
 
@@ -99,7 +116,7 @@ class DistillTrainer:
 
 
         # =====================================
-        # 1. SAM3 teacher feature
+        # 1. SAM3 teacher
         # =====================================
 
 
@@ -142,9 +159,13 @@ class DistillTrainer:
         self.yolo_hook.clear()
 
 
-        student_output = self.student(
-            images
-        )
+
+        with autocast():
+
+
+            student_output = self.student(
+                images
+            )
 
 
 
@@ -164,61 +185,85 @@ class DistillTrainer:
 
 
         # =====================================
-        # 3. adapter
+        # 3. Adapter
         # =====================================
 
 
         adapted_features = []
 
 
-        for i, feature in enumerate(
-            student_features
-        ):
+
+        with autocast():
 
 
-            y = self.adapters[i](
-
-                feature,
-
-                target_size =
-                sam3_features[i].shape[-2:]
-
-            )
+            for i, feature in enumerate(
+                student_features
+            ):
 
 
-            adapted_features.append(y)
+                y = self.adapters[i](
+
+                    feature,
+
+                    target_size =
+                    sam3_features[i].shape[-2:]
+
+                )
+
+
+                adapted_features.append(y)
 
 
 
         # =====================================
         # 4. Feature loss
+        #
+        # MSE建议float32
         # =====================================
+
+
+        adapted_features_fp32 = [
+
+            x.float()
+
+            for x in adapted_features
+
+        ]
+
+
+        sam3_features_fp32 = [
+
+            x.float()
+
+            for x in sam3_features
+
+        ]
+
 
 
         loss_feature = self.feature_loss(
 
-            adapted_features,
+            adapted_features_fp32,
 
-            sam3_features
+            sam3_features_fp32
 
         )
 
 
 
         # =====================================
-        # 5. YOLO native segmentation loss
+        # 5. YOLO segmentation loss
         # =====================================
 
 
-        yolo_result = self.student.loss(
-            batch
-        )
+        with autocast():
 
 
+            yolo_result = self.student.loss(
+                batch
+            )
 
-        #
-        # Ultralytics compatibility
-        #
+
 
         if isinstance(
             yolo_result,
@@ -228,6 +273,7 @@ class DistillTrainer:
 
             loss_yolo = yolo_result[0]
 
+
         else:
 
 
@@ -235,9 +281,7 @@ class DistillTrainer:
 
 
 
-        #
-        # make scalar
-        #
+        # YOLO loss scalar
 
         if loss_yolo.ndim > 0:
 
@@ -264,10 +308,6 @@ class DistillTrainer:
 
 
 
-        #
-        # ensure scalar
-        #
-
         if loss.ndim > 0:
 
             loss = loss.sum()
@@ -275,14 +315,22 @@ class DistillTrainer:
 
 
         # =====================================
-        # backward
+        # AMP backward
         # =====================================
 
 
-        loss.backward()
+        self.scaler.scale(
+            loss
+        ).backward()
 
 
-        self.optimizer.step()
+
+        self.scaler.step(
+            self.optimizer
+        )
+
+
+        self.scaler.update()
 
 
 
