@@ -21,6 +21,8 @@ Backward
 |
 Validation
 |
+mAP Evaluation
+|
 Checkpoint
 
 """
@@ -40,6 +42,14 @@ from datasets.yolo_dataset import YOLODataset
 
 
 from validation.evaluator import DistillEvaluator
+
+
+from validation.map_evaluator import MAPEvaluator
+
+
+from utils.export_eval import (
+    build_eval_model_from_student
+)
 
 
 from utils.checkpoint import (
@@ -91,6 +101,19 @@ CHECKPOINT_DIR = (
 
 
 
+DATA_YAML = (
+"/data/ultralytics/"
+"Sam3-yolo-distill/datasets/carpet.yaml"
+)
+
+
+
+MODEL_YAML = (
+"/data/ultralytics/ultralytics/cfg/models/v8/yolov8-seg.yaml"
+)
+
+
+
 os.makedirs(
     CHECKPOINT_DIR,
     exist_ok=True
@@ -106,12 +129,6 @@ os.makedirs(
 RESUME = None
 
 
-# example:
-#
-# RESUME =
-# "/data/ultralytics/Sam3-yolo-distill/weights/checkpoints/last.pt"
-
-
 
 # =====================================================
 # main
@@ -119,11 +136,6 @@ RESUME = None
 
 
 def main():
-
-
-    # =================================================
-    # create trainer
-    # =================================================
 
 
     print("================")
@@ -139,19 +151,18 @@ def main():
 
 
 
-    # =================================================
-    # resume checkpoint
-    # =================================================
+    # ==========================
+    # resume
+    # ==========================
 
 
     start_epoch = 0
 
 
-
     if RESUME is not None:
 
 
-        start_epoch, _ = load_checkpoint(
+        start_epoch,_ = load_checkpoint(
 
             RESUME,
 
@@ -167,15 +178,15 @@ def main():
 
 
         print(
-            "resume from epoch:",
+            "resume epoch:",
             start_epoch
         )
 
 
 
-    # =================================================
+    # ==========================
     # evaluator
-    # =================================================
+    # ==========================
 
 
     print("================")
@@ -194,7 +205,7 @@ def main():
 
         trainer.yolo_hook,
 
-        device=DEVICE
+        DEVICE
 
     )
 
@@ -205,26 +216,20 @@ def main():
 
 
 
-    # =================================================
-    # train dataset
-    # =================================================
-
-
-    print("================")
-    print("create train dataset")
-
+    # ==========================
+    # dataset
+    # ==========================
 
 
     train_dataset = YOLODataset(
 
-        image_dir=TRAIN_IMAGE_DIR,
+        TRAIN_IMAGE_DIR,
 
-        label_dir=TRAIN_LABEL_DIR,
+        TRAIN_LABEL_DIR,
 
-        img_size=640
+        640
 
     )
-
 
 
     train_loader = DataLoader(
@@ -245,33 +250,15 @@ def main():
 
 
 
-    print(
-        "train dataset:",
-        len(train_dataset)
-    )
-
-
-
-    # =================================================
-    # validation dataset
-    # =================================================
-
-
-    print("================")
-    print("create val dataset")
-
-
-
     val_dataset = YOLODataset(
 
-        image_dir=VAL_IMAGE_DIR,
+        VAL_IMAGE_DIR,
 
-        label_dir=VAL_LABEL_DIR,
+        VAL_LABEL_DIR,
 
-        img_size=640
+        640
 
     )
-
 
 
     val_loader = DataLoader(
@@ -293,79 +280,72 @@ def main():
 
 
     print(
-        "val dataset:",
-        len(val_dataset)
+        "train:",
+        len(train_dataset)
     )
 
 
-
-    # =================================================
-    # training config
-    # =================================================
-
+    print(
+        "val:",
+        len(val_dataset)
+    )
 
     epochs = 100
 
-
     best_val_loss = float("inf")
 
-
+    best_map = 0.0
 
     print("================")
     print("start training")
-
-
 
     # =================================================
     # epoch loop
     # =================================================
 
-
     for epoch in range(
-        start_epoch,
-        epochs
+            start_epoch,
+            epochs
     ):
-
 
         print(
             "\nEpoch:",
             epoch
         )
 
-
+        # ===============================
+        # train mode
+        # ===============================
 
         trainer.student.train()
 
         for adapter in trainer.adapters:
-
             adapter.train()
-
-
 
         epoch_loss = 0
 
-
-
         # ===============================
-        # train
+        # training
         # ===============================
 
+        for step, batch in enumerate(train_loader):
 
-        for step,batch in enumerate(train_loader):
+            # ---------------------------
+            # cuda
+            # ---------------------------
 
-
-            for k,v in batch.items():
-
+            for k, v in batch.items():
 
                 if torch.is_tensor(v):
-
                     batch[k] = v.cuda(
 
                         non_blocking=True
 
                     )
 
-
+            # ---------------------------
+            # train step
+            # ---------------------------
 
             result = trainer.train_step(
 
@@ -373,55 +353,43 @@ def main():
 
             )
 
-
-
             epoch_loss += result["loss"]
 
-
-
             if step % 10 == 0:
-
-
                 print(
 
+                    "epoch:",
                     epoch,
 
+                    "step:",
                     step,
 
                     result
 
                 )
 
+        avg_train_loss = (
 
+                epoch_loss /
 
-        avg_loss = (
-
-            epoch_loss /
-
-            len(train_loader)
+                len(train_loader)
 
         )
-
 
         print(
 
             "train loss:",
 
-            avg_loss
+            avg_train_loss
 
         )
 
-
-
-        # ===============================
-        # validation
-        # ===============================
-
+        # =================================================
+        # validation loss
+        # =================================================
 
         print("================")
-        print("validation")
-
-
+        print("validation loss")
 
         val_result = evaluator.evaluate(
 
@@ -429,14 +397,9 @@ def main():
 
         )
 
-
         print(
-
             val_result
-
         )
-
-
 
         current_val_loss = (
 
@@ -444,12 +407,56 @@ def main():
 
         )
 
+        # =================================================
+        # mAP evaluation
+        # =================================================
 
+        print("================")
+        print("mAP evaluation")
 
-        # ===============================
-        # save last
-        # ===============================
+        # 创建临时YOLO模型用于val
 
+        eval_model = build_eval_model_from_student(
+
+            trainer.student,
+
+            MODEL_YAML
+
+        )
+
+        map_evaluator = MAPEvaluator(
+
+            eval_model,
+
+            DATA_YAML,
+
+            DEVICE
+
+        )
+
+        map_result = map_evaluator.evaluate()
+
+        print(
+
+            map_result
+
+        )
+
+        current_map = (
+
+            map_result.get(
+
+                "mask_mAP50_95",
+
+                0
+
+            )
+
+        )
+
+        # =================================================
+        # save last checkpoint
+        # =================================================
 
         last_path = os.path.join(
 
@@ -458,8 +465,6 @@ def main():
             "last.pt"
 
         )
-
-
 
         save_checkpoint(
 
@@ -478,48 +483,45 @@ def main():
             {
 
                 "train_loss":
-                avg_loss,
+
+                    avg_train_loss,
 
                 "val":
-                val_result
+
+                    val_result,
+
+                "map":
+
+                    map_result
 
             }
 
         )
 
-
-
         print(
+
             "saved last checkpoint"
+
         )
 
-
-
-        # ===============================
-        # save best
-        # ===============================
-
+        # =================================================
+        # best validation loss
+        # =================================================
 
         if current_val_loss < best_val_loss:
-
-
             best_val_loss = current_val_loss
 
-
-
-            best_path = os.path.join(
+            best_loss_path = os.path.join(
 
                 CHECKPOINT_DIR,
 
-                "best.pt"
+                "best_loss.pt"
 
             )
 
-
-
             save_checkpoint(
 
-                best_path,
+                best_loss_path,
 
                 epoch,
 
@@ -534,35 +536,89 @@ def main():
                 {
 
                     "train_loss":
-                    avg_loss,
+
+                        avg_train_loss,
 
                     "val":
-                    val_result
+
+                        val_result,
+
+                    "map":
+
+                        map_result
 
                 }
 
             )
 
-
-
             print(
 
-                "new best model:",
+                "new best val loss:",
 
                 best_val_loss
 
             )
 
+        # =================================================
+        # best mAP
+        # =================================================
 
+        if current_map > best_map:
+            best_map = current_map
 
-        # ===============================
+            best_map_path = os.path.join(
+
+                CHECKPOINT_DIR,
+
+                "best_map.pt"
+
+            )
+
+            save_checkpoint(
+
+                best_map_path,
+
+                epoch,
+
+                trainer.student,
+
+                trainer.adapters,
+
+                trainer.optimizer,
+
+                trainer.scaler,
+
+                {
+
+                    "train_loss":
+
+                        avg_train_loss,
+
+                    "val":
+
+                        val_result,
+
+                    "map":
+
+                        map_result
+
+                }
+
+            )
+
+            print(
+
+                "new best mAP:",
+
+                best_map
+
+            )
+
+        # =================================================
         # periodic checkpoint
-        # ===============================
-
+        # =================================================
 
         if epoch % 10 == 0:
-
-
             epoch_path = os.path.join(
 
                 CHECKPOINT_DIR,
@@ -570,7 +626,6 @@ def main():
                 f"epoch_{epoch}.pt"
 
             )
-
 
             save_checkpoint(
 
@@ -589,24 +644,28 @@ def main():
                 {
 
                     "train_loss":
-                    avg_loss,
+
+                        avg_train_loss,
 
                     "val":
-                    val_result
+
+                        val_result,
+
+                    "map":
+
+                        map_result
 
                 }
 
             )
 
-
             print(
 
                 "saved:",
+
                 epoch_path
 
             )
-
-
 
     print("================")
     print(
@@ -614,7 +673,6 @@ def main():
     )
 
 
-
 if __name__ == "__main__":
-
     main()
+
