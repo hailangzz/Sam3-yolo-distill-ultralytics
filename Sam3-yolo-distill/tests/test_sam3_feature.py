@@ -16,7 +16,7 @@ overrides = {
     "mode": "predict",
 
     "model":
-    "/data/ultralytics/Sam3-yolo-distill/models/sam3.pt",
+    "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/sam3.pt",
 
 }
 
@@ -32,7 +32,7 @@ predictor = SAM3SemanticPredictor(
 
 
 predictor.bpe_path = (
-    "/data/ultralytics/Sam3-yolo-distill/models/"
+    "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/"
     "bpe_simple_vocab_16e6.txt.gz"
 )
 

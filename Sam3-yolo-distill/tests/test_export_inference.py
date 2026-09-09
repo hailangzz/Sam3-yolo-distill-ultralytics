@@ -4,7 +4,7 @@ from ultralytics import YOLO
 
 
 MODEL = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/"
     "weights/"
     "distilled_yolov8n_seg.pt"
@@ -12,9 +12,7 @@ MODEL = (
 
 
 IMAGE = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/"
-    "tests/data/images/train/image_batch1_14.jpg"
+    "/home/chenkejing/database/test/data/images/train/image_batch1_14.jpg"
 )
 
 

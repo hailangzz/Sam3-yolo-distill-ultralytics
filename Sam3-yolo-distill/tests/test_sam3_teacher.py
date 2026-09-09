@@ -8,11 +8,11 @@ from teacher.sam3_teacher import SAM3Teacher
 teacher = SAM3Teacher(
 
     model_path=
-    "/data/ultralytics/Sam3-yolo-distill/models/sam3.pt",
+    "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/sam3.pt",
 
 
     bpe_path=
-    "/data/ultralytics/Sam3-yolo-distill/models/bpe_simple_vocab_16e6.txt.gz"
+    "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/bpe_simple_vocab_16e6.txt.gz"
 
 )
 

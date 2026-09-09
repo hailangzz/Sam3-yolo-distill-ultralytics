@@ -698,3 +698,9 @@ sam3-yolo-distill/
 3. `yolo_hook.py`（YOLO特征选择）
 
 下一步建议我们直接针对 **Ultralytics 8.3.237源码结构，实现 `distill_trainer.py`，这是整个Feature Distillation的核心。**
+
+
+### 注意 pycharm Edit设置 ###
+Working directory ： /data/Sam3-yolo-distill-ultralytics/ultralytics
+
+Environment variables： PYTHONPATH=/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill:/data/Sam3-yolo-distill-ultralytics

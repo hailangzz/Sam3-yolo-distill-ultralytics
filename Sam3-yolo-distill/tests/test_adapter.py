@@ -61,4 +61,4 @@ for i,x in enumerate(out):
     )
 
 
-# PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill python tests/test_adapter.py
+# PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill python tests/test_adapter.py

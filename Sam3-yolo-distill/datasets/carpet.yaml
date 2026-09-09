@@ -1,4 +1,4 @@
-path: /data/ultralytics/Sam3-yolo-distill/tests/data
+path: /home/chenkejing/database/test/data
 
 train: images/train
 val: images/val

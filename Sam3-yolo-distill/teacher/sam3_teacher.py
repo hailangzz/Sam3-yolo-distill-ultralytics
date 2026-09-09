@@ -3,20 +3,25 @@
 """
 SAM3 Teacher Wrapper
 
-用于 YOLOv8-Seg feature distillation
+SAM3 multimodal teacher
 
 Input:
-    images:
-        Tensor[B,3,H,W]
+
+images:
+    Tensor[B,3,H,W]
+
+prompts:
+    list[str]
+
 
 Output:
-    SAM3 feature pyramid:
-        [
-            Tensor[B,256,288,288],
-            Tensor[B,256,144,144],
-            Tensor[B,256,72,72],
-            Tensor[B,256,36,36]
-        ]
+
+SAM3 text conditioned feature pyramid
+
+
+Used for:
+
+SAM3 -> YOLOv8-seg feature distillation
 
 """
 
@@ -32,6 +37,7 @@ from ultralytics.models.sam import SAM3SemanticPredictor
 
 class SAM3Teacher(nn.Module):
 
+
     def __init__(
         self,
         model_path,
@@ -40,6 +46,7 @@ class SAM3Teacher(nn.Module):
         img_size=1008,
         fp16=True,
     ):
+
 
         super().__init__()
 
@@ -51,9 +58,10 @@ class SAM3Teacher(nn.Module):
         self.fp16 = fp16
 
 
-        # ==========================
-        # SAM3 predictor
-        # ==========================
+
+        # =====================================
+        # load SAM3
+        # =====================================
 
         overrides = {
 
@@ -79,42 +87,63 @@ class SAM3Teacher(nn.Module):
         predictor.setup_model()
 
 
-        model = predictor.model
+        sam3_model = predictor.model
 
 
-        model.to(device)
-
-        model.eval()
+        sam3_model.to(device)
 
 
+        sam3_model.eval()
 
-        # 保存 vision backbone
 
-        self.backbone = (
-            model
+
+        self.model = sam3_model
+
+
+
+        # =====================================
+        # SAM3 components
+        # =====================================
+
+
+        self.vision_encoder = (
+
+            sam3_model
             .backbone
             .vision_backbone
+
         )
 
 
-        # 设置 SAM3 输入尺寸
+        self.language_encoder = (
 
-        self.backbone.set_imgsz(
+            sam3_model
+            .backbone
+            .language_backbone
+
+        )
+
+
+
+        self.vision_encoder.set_imgsz(
+
             [
                 img_size,
                 img_size
             ]
+
         )
 
 
 
-        # ==========================
+        # =====================================
         # freeze
-        # ==========================
+        # =====================================
+
 
         for p in self.parameters():
 
-            p.requires_grad=False
+            p.requires_grad = False
 
 
 
@@ -124,47 +153,43 @@ class SAM3Teacher(nn.Module):
 
 
 
+    # =====================================
+    # forward
+    # =====================================
+
+
     @torch.no_grad()
     def forward(
         self,
-        images
+        images,
+        prompts
     ):
 
 
         """
         images:
 
-        Tensor:
-            [B,3,H,W]
+            Tensor[B,3,H,W]
 
-        range:
-            0~1
+
+        prompts:
+
+            list[str]
+
+
+        example:
+
+            [
+                "carpet"
+            ]
 
         """
 
 
 
-        # ==========================
-        # resize
-        # ==========================
-
-        if (
-            images.shape[-1] != self.img_size
-            or
-            images.shape[-2] != self.img_size
-        ):
-
-
-            images = F.interpolate(
-                images,
-                size=(
-                    self.img_size,
-                    self.img_size
-                ),
-                mode="bilinear",
-                align_corners=False
-            )
-
+        # =================================
+        # image preprocess
+        # =================================
 
 
         images = images.to(
@@ -178,29 +203,185 @@ class SAM3Teacher(nn.Module):
 
 
 
-        # ==========================
-        # SAM3 forward
-        # ==========================
+        if (
 
-        outputs = self.backbone(
+            images.shape[-1]
+            !=
+            self.img_size
+
+            or
+
+            images.shape[-2]
+            !=
+            self.img_size
+
+        ):
+
+
+            images = F.interpolate(
+
+                images,
+
+                size=(
+
+                    self.img_size,
+
+                    self.img_size
+
+                ),
+
+                mode="bilinear",
+
+                align_corners=False
+
+            )
+
+
+
+        # =================================
+        # vision feature
+        # =================================
+
+
+        vision_output = self.vision_encoder(
+
             images
+
+        )
+
+
+        #
+        # SAM3:
+        #
+        # (
+        #   feature pyramid,
+        #   position,
+        #   ...
+        # )
+        #
+
+        vision_features = vision_output[0]
+
+
+
+        # =================================
+        # text feature
+        # =================================
+
+
+        text_outputs = self.language_encoder(
+
+            prompts
+
         )
 
 
         """
-        outputs:
+        SAM3 language output:
+
 
         (
-            sam3_features,
-            sam3_pos,
-            sam2_features,
-            sam2_pos
+            token_count,
+
+            token_features,
+
+            global_features
         )
+
+
+        token_features:
+
+            [32,1,256]
+
+
+        global_features:
+
+            [32,1,1024]
 
         """
 
 
-        sam3_features = outputs[0]
+
+        token_features = text_outputs[1]
 
 
-        return sam3_features
+
+        #
+        # [32,1,256]
+        #
+        # ->
+        #
+        # [1,256]
+        #
+
+        text_features = token_features.mean(
+
+            dim=0
+
+        )
+
+
+
+        #
+        # debug
+        #
+
+        # print(
+        #     "text feature:",
+        #     text_features.shape
+        # )
+
+
+
+        # =================================
+        # image-text fusion
+        # =================================
+
+
+        fused_features = []
+
+
+
+        for feat in vision_features:
+
+
+
+            #
+            # text:
+            #
+            # [1,256]
+            #
+            # ->
+            #
+            # [1,256,1,1]
+            #
+
+            text = (
+
+                text_features
+
+                .unsqueeze(-1)
+
+                .unsqueeze(-1)
+
+            )
+
+
+
+            #
+            # broadcast
+            #
+
+            feat = feat + text
+
+
+
+            fused_features.append(
+
+                feat
+
+            )
+
+
+
+        return fused_features

@@ -7,7 +7,7 @@ from utils.export_yolo import export_student
 
 CHECKPOINT = (
 
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/"
 "weights/"
 "epoch_20.pt"
@@ -18,7 +18,7 @@ CHECKPOINT = (
 
 MODEL_YAML = (
 
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/"
 "yolov8n-seg.yaml"
 
@@ -28,7 +28,7 @@ MODEL_YAML = (
 
 OUTPUT = (
 
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/"
 "weights/"
 "best_distill.pt"

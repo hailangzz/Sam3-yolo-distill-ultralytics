@@ -69,47 +69,43 @@ DEVICE = "cuda"
 
 
 TRAIN_IMAGE_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/images/train"
+"/home/chenkejing/database/test/data/images/train"
 )
 
 
 TRAIN_LABEL_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/labels/train"
+"/home/chenkejing/database/test/data/labels/train"
 )
 
 
 
 VAL_IMAGE_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/images/val"
+"/home/chenkejing/database/test/data/images/val"
 )
 
 
 VAL_LABEL_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/labels/val"
+"/home/chenkejing/database/test/data/labels/val"
 )
 
 
 
 CHECKPOINT_DIR = (
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/weights/checkpoints"
 )
 
 
 
 DATA_YAML = (
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/datasets/carpet.yaml"
 )
 
 
 
 MODEL_YAML = (
-"/data/ultralytics/ultralytics/cfg/models/v8/yolov8-seg.yaml"
+"/data/Sam3-yolo-distill-ultralytics/ultralytics/cfg/models/v8/yolov8-seg.yaml"
 )
 
 

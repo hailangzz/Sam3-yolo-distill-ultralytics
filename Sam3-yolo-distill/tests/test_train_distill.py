@@ -41,19 +41,19 @@ from hooks.yolo_hook import YOLOFeatureHook
 # =====================================================
 
 YOLO_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/yolov8n-seg.pt"
 )
 
 
 SAM3_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/sam3.pt"
 )
 
 
 BPE_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/"
     "bpe_simple_vocab_16e6.txt.gz"
 )
@@ -448,7 +448,7 @@ print(
 
 """
 
-cd /data/ultralytics/Sam3-yolo-distill
-PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill python tests/test_train_distill.py
+cd /data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill
+PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill python tests/test_train_distill.py
 
 """

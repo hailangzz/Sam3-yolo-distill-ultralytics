@@ -30,13 +30,11 @@ from datasets.yolo_dataset import YOLODataset
 # =====================================================
 
 IMAGE_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/images/train"
+    "/home/chenkejing/database/test/data/images/train"
 )
 
 LABEL_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/labels/train"
+    "/home/chenkejing/database/test/data/labels/train"
 )
 
 
@@ -199,8 +197,8 @@ print(
 )
 
 """
-cd /data/ultralytics/Sam3-yolo-distill
+cd /data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill
 
-PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill \
+PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill \
 python tests/test_yolo_dataset.py
 """

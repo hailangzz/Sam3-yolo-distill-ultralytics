@@ -15,7 +15,7 @@ from validation.map_evaluator import MAPEvaluator
 
 MODEL_PATH = (
 
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/"
 "yolov8n-seg.pt"
 
@@ -25,7 +25,7 @@ MODEL_PATH = (
 
 DATA_YAML = (
 
-"/data/ultralytics/"
+"/data/Sam3-yolo-distill-ultralytics/"
 "Sam3-yolo-distill/"
 "tests/data.yaml"
 

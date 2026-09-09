@@ -81,4 +81,4 @@ for i,f in enumerate(features):
 
 hook.remove()
 
-# PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill  python tests/test_yolo_hook.py
+# PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill  python tests/test_yolo_hook.py

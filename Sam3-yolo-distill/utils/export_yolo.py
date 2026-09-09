@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
         checkpoint_path=
 
-        "/data/ultralytics/"
+        "/data/Sam3-yolo-distill-ultralytics/"
         "Sam3-yolo-distill/"
         "weights/checkpoints/best.pt",
 
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 
         model_path=
 
-        "/data/ultralytics/"
+        "/data/Sam3-yolo-distill-ultralytics/"
         "Sam3-yolo-distill/"
         "yolov8n-seg.pt",
 
@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
         output_path=
 
-        "/data/ultralytics/"
+        "/data/Sam3-yolo-distill-ultralytics/"
         "Sam3-yolo-distill/"
         "weights/"
         "distilled_yolov8n_seg.pt"

@@ -38,21 +38,21 @@ DEVICE = "cuda"
 
 
 YOLO_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/yolov8n-seg.pt"
 )
 
 
 
 SAM3_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/sam3.pt"
 )
 
 
 
 BPE_PATH = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/"
     "bpe_simple_vocab_16e6.txt.gz"
 )

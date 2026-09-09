@@ -10,13 +10,13 @@ from losses.feature_loss import FeatureLoss
 
 
 sam3_path = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/sam3.pt"
 )
 
 
 bpe_path = (
-    "/data/ultralytics/"
+    "/data/Sam3-yolo-distill-ultralytics/"
     "Sam3-yolo-distill/models/"
     "bpe_simple_vocab_16e6.txt.gz"
 )
@@ -80,9 +80,9 @@ image=torch.randn(
 with torch.no_grad():
 
     teacher_feat = teacher(
-        image
+        image,
+        prompts=["carpet"]
     )
-
 
 teacher_feat = [
     x.detach().clone()

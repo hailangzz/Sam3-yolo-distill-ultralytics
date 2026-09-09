@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Real training pipeline test
+Real training pipeline
 
 Dataset
 |
@@ -9,15 +9,19 @@ DataLoader
 |
 DistillTrainer
 |
-SAM3 + YOLO
+SAM3 Teacher + YOLO Student
 |
 Loss
 |
 Backward
+|
+Checkpoint
 """
 
 
+import os
 import torch
+
 
 from torch.utils.data import DataLoader
 
@@ -34,20 +38,109 @@ from train_distill import create_trainer
 # =====================================================
 
 
+# IMAGE_DIR = (
+#     "/home/chenkejing/database/test/data/images/train"
+# )
+#
+#
+# LABEL_DIR = (
+#     "/home/chenkejing/database/test/data/labels/train"
+# )
+
 IMAGE_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/images/train"
+    "/data/database/AITotal_SegmentDatabase/finetune_random_sample_datebase/random_carpet_database/images/train"
 )
 
 
 LABEL_DIR = (
-    "/data/ultralytics/"
-    "Sam3-yolo-distill/tests/data/labels/train"
+    "/data/database/AITotal_SegmentDatabase/finetune_random_sample_datebase/random_carpet_database/labels/train"
 )
 
 
 
-DEVICE="cuda"
+DEVICE = "cuda"
+
+
+
+EPOCHS = 100
+
+
+BATCH_SIZE = 8
+
+
+
+CHECKPOINT_DIR = (
+    "./checkpoints"
+)
+
+
+
+os.makedirs(
+    CHECKPOINT_DIR,
+    exist_ok=True
+)
+
+
+
+# =====================================================
+# checkpoint save
+# =====================================================
+
+
+def save_checkpoint(
+        trainer,
+        epoch,
+        loss,
+        filename
+):
+
+
+    save_path = os.path.join(
+        CHECKPOINT_DIR,
+        filename
+    )
+
+
+    checkpoint = {
+
+        "epoch": epoch,
+
+        "loss": loss,
+
+
+        # student model
+        "model": trainer.model.state_dict()
+        if hasattr(trainer,"model")
+        else None,
+
+    }
+
+
+    # optimizer
+
+    if hasattr(
+        trainer,
+        "optimizer"
+    ):
+
+        checkpoint["optimizer"] = (
+            trainer.optimizer.state_dict()
+        )
+
+
+
+    torch.save(
+        checkpoint,
+        save_path
+    )
+
+
+    print(
+        "checkpoint saved:",
+        save_path
+    )
+
+
 
 
 
@@ -60,6 +153,7 @@ print("================")
 print("create trainer")
 
 
+
 trainer = create_trainer()
 
 
@@ -70,8 +164,10 @@ print(
 
 
 
+
+
 # =====================================================
-# create dataset
+# dataset
 # =====================================================
 
 
@@ -103,6 +199,8 @@ assert len(dataset)>0
 
 
 
+
+
 # =====================================================
 # dataloader
 # =====================================================
@@ -112,7 +210,7 @@ loader = DataLoader(
 
     dataset,
 
-    batch_size=2,
+    batch_size=BATCH_SIZE,
 
     shuffle=True,
 
@@ -136,133 +234,254 @@ print(
 
 
 
+
+
+
 # =====================================================
-# get batch
+# training
 # =====================================================
 
 
 print("================")
-print("get batch")
+print("START TRAINING")
 
 
 
-batch = next(
-    iter(loader)
+best_loss = float("inf")
+
+
+
+for epoch in range(
+    1,
+    EPOCHS + 1
+):
+
+
+    print("\n")
+    print(
+        "===================="
+    )
+
+    print(
+        f"Epoch {epoch}/{EPOCHS}"
+    )
+
+
+
+    total_loss = 0.0
+
+
+
+    total_yolo = 0.0
+
+
+    total_feature = 0.0
+
+
+
+    batch_count = 0
+
+
+
+    for batch_idx,batch in enumerate(loader):
+
+
+
+        # -------------------------
+        # cuda
+        # -------------------------
+
+        for k,v in batch.items():
+
+
+            if torch.is_tensor(v):
+
+                batch[k] = v.to(
+                    DEVICE,
+                    non_blocking=True
+                )
+
+
+
+        # -------------------------
+        # train step
+        # -------------------------
+
+
+        result = trainer.train_step(
+            batch
+        )
+
+
+
+        loss = result["loss"]
+
+
+
+        total_loss += (
+            float(loss)
+        )
+
+
+        total_yolo += (
+            float(
+                result["loss_yolo"]
+            )
+        )
+
+
+        total_feature += (
+            float(
+                result["loss_feature"]
+            )
+        )
+
+
+
+        batch_count += 1
+
+
+
+        if batch_idx % 10 == 0:
+
+
+            print(
+
+                f"[Epoch {epoch}] "
+
+                f"batch {batch_idx}/{len(loader)} "
+
+                f"loss={loss:.4f} "
+
+                f"yolo={result['loss_yolo']:.4f} "
+
+                f"feature={result['loss_feature']:.4f}"
+
+            )
+
+
+
+
+
+    # =============================
+    # epoch statistics
+    # =============================
+
+
+    avg_loss = (
+        total_loss / batch_count
+    )
+
+
+    avg_yolo = (
+        total_yolo / batch_count
+    )
+
+
+    avg_feature = (
+        total_feature / batch_count
+    )
+
+
+
+    print(
+        ""
+    )
+
+    print(
+        f"Epoch {epoch} finished"
+    )
+
+
+    print(
+        "loss:",
+        avg_loss
+    )
+
+
+    print(
+        "loss_yolo:",
+        avg_yolo
+    )
+
+
+    print(
+        "loss_feature:",
+        avg_feature
+    )
+
+
+
+
+    # =============================
+    # save epoch checkpoint
+    # =============================
+
+
+    save_checkpoint(
+
+        trainer,
+
+        epoch,
+
+        avg_loss,
+
+        f"epoch_{epoch}.pt"
+
+    )
+
+
+
+    # latest
+
+    save_checkpoint(
+
+        trainer,
+
+        epoch,
+
+        avg_loss,
+
+        "latest.pt"
+
+    )
+
+
+
+
+
+    # best
+
+
+    if avg_loss < best_loss:
+
+
+        best_loss = avg_loss
+
+
+        save_checkpoint(
+
+            trainer,
+
+            epoch,
+
+            avg_loss,
+
+            "best.pt"
+
+        )
+
+
+
+print("================")
+
+print(
+    "REAL TRAIN FINISHED"
 )
-
-
-
-for k,v in batch.items():
-
-
-    if torch.is_tensor(v):
-
-        print(
-            k,
-            v.shape,
-            v.dtype,
-            v.device
-        )
-
-
-    else:
-
-        print(
-            k,
-            type(v)
-        )
-
-
-
-# =====================================================
-# move cuda
-# =====================================================
-
-
-print("================")
-print("move batch cuda")
-
-
-
-for k,v in batch.items():
-
-
-    if torch.is_tensor(v):
-
-        batch[k]=v.to(
-            DEVICE,
-            non_blocking=True
-        )
 
 
 
 print(
-    "batch cuda ready"
-)
-
-
-
-for k,v in batch.items():
-
-    if torch.is_tensor(v):
-
-        print(
-            k,
-            v.device
-        )
-
-
-
-# =====================================================
-# train step
-# =====================================================
-
-
-print("================")
-print("run train step")
-
-
-
-result = trainer.train_step(
-    batch
-)
-
-
-
-print(
-    result
-)
-
-
-
-# =====================================================
-# check loss
-# =====================================================
-
-
-print("================")
-print("check loss")
-
-
-
-assert "loss" in result
-
-assert "loss_yolo" in result
-
-assert "loss_feature" in result
-
-
-
-assert result["loss"] > 0
-
-assert result["loss_yolo"] > 0
-
-assert result["loss_feature"] > 0
-
-
-
-print("================")
-
-print(
-    "REAL TRAIN TEST PASSED"
+    "best loss:",
+    best_loss
 )

@@ -9,7 +9,7 @@ overrides = {
 
     "mode": "predict",
 
-    "model": "/data/ultralytics/Sam3-yolo-distill/models/sam3.pt",
+    "model": "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/sam3.pt",
 
 }
 
@@ -21,7 +21,7 @@ predictor = SAM3SemanticPredictor(
 
 # 指定 tokenizer 文件
 predictor.bpe_path = (
-    "/data/ultralytics/Sam3-yolo-distill/models/"
+    "/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill/models/"
     "bpe_simple_vocab_16e6.txt.gz"
 )
 

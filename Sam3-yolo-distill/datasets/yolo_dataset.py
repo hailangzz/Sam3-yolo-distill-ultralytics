@@ -3,23 +3,34 @@
 """
 YOLOv8-seg dataset for SAM3 distillation
 
-Output batch format:
+Output:
 
 {
-    "img": Tensor[B,3,H,W],
+    img:
+        Tensor[B,3,H,W]
 
-    "batch_idx": Tensor[N],
+    cls:
+        Tensor[N,1]
 
-    "cls": Tensor[N,1],
+    bboxes:
+        Tensor[N,4]
 
-    "bboxes": Tensor[N,4],
+    masks:
+        Tensor[N,H,W]
 
-    "masks": Tensor[B,H,W]
+    batch_idx:
+        Tensor[N]
+
+    prompts:
+        List[str]
+
 }
 
 Compatible with:
 
-Ultralytics YOLOv8-seg loss
+YOLOv8-seg loss
+
+SAM3 text prompt
 """
 
 
@@ -30,6 +41,9 @@ import cv2
 import torch
 
 from torch.utils.data import Dataset
+
+
+from configs.classes import CLASS_PROMPTS
 
 
 
@@ -88,9 +102,13 @@ class YOLODataset(Dataset):
 
 
         image_path = os.path.join(
+
             self.image_dir,
+
             image_name
+
         )
+
 
 
         label_path = os.path.join(
@@ -107,9 +125,9 @@ class YOLODataset(Dataset):
 
 
 
-        # =====================
+        # =================================
         # image
-        # =====================
+        # =================================
 
 
         img = cv2.imread(
@@ -118,13 +136,12 @@ class YOLODataset(Dataset):
 
 
         img = cv2.cvtColor(
+
             img,
+
             cv2.COLOR_BGR2RGB
+
         )
-
-
-
-        h,w,_ = img.shape
 
 
 
@@ -143,9 +160,7 @@ class YOLODataset(Dataset):
 
         img = (
 
-            torch.from_numpy(
-                img
-            )
+            torch.from_numpy(img)
 
             .permute(
                 2,
@@ -161,16 +176,23 @@ class YOLODataset(Dataset):
 
 
 
-        # =====================
+        # =================================
         # labels
-        # =====================
+        # =================================
 
 
-        cls=[]
+        cls = []
 
-        boxes=[]
+        boxes = []
 
-        masks=[]
+        masks = []
+
+
+        #
+        # SAM3 prompt
+        #
+
+        prompts = []
 
 
 
@@ -179,37 +201,42 @@ class YOLODataset(Dataset):
         ):
 
 
+
             with open(
                 label_path,
                 "r"
             ) as f:
 
 
-                lines=f.readlines()
+                lines = f.readlines()
 
 
 
             for line in lines:
 
 
-                data=list(
+                data = list(
+
                     map(
                         float,
                         line.strip().split()
                     )
+
                 )
 
 
-                class_id=int(
+                class_id = int(
                     data[0]
                 )
 
 
-                points=data[1:]
+
+                points = data[1:]
 
 
 
-                polygon=[]
+                polygon = []
+
 
 
                 for i in range(
@@ -219,52 +246,90 @@ class YOLODataset(Dataset):
                 ):
 
 
-                    x=points[i]*self.img_size
+                    x = (
 
-                    y=points[i+1]*self.img_size
+                        points[i]
+
+                        *
+
+                        self.img_size
+
+                    )
+
+
+                    y = (
+
+                        points[i+1]
+
+                        *
+
+                        self.img_size
+
+                    )
 
 
                     polygon.append(
+
                         [
                             x,
                             y
                         ]
+
                     )
 
 
 
-                polygon=torch.tensor(
+                polygon = torch.tensor(
+
                     polygon,
+
                     dtype=torch.float32
+
                 )
 
 
 
+                # =========================
                 # bbox
-
-                xmin=polygon[:,0].min()
-
-                ymin=polygon[:,1].min()
-
-                xmax=polygon[:,0].max()
-
-                ymax=polygon[:,1].max()
+                # =========================
 
 
+                xmin = polygon[:,0].min()
 
-                cx=(xmin+xmax)/2
+                ymin = polygon[:,1].min()
 
-                cy=(ymin+ymax)/2
+                xmax = polygon[:,0].max()
 
-                bw=xmax-xmin
+                ymax = polygon[:,1].max()
 
-                bh=ymax-ymin
+
+
+                cx = (
+
+                    xmin+xmax
+
+                ) / 2
+
+
+
+                cy = (
+
+                    ymin+ymax
+
+                ) / 2
+
+
+
+                bw = xmax-xmin
+
+                bh = ymax-ymin
 
 
 
                 boxes.append(
 
                     [
+
                         cx/self.img_size,
 
                         cy/self.img_size,
@@ -280,16 +345,47 @@ class YOLODataset(Dataset):
 
 
                 cls.append(
+
                     [
                         class_id
                     ]
+
                 )
 
 
 
-                # mask
+                # =========================
+                # SAM3 text prompt
+                # =========================
 
-                mask=torch.zeros(
+
+                if class_id in CLASS_PROMPTS:
+
+
+                    prompts.append(
+
+                        CLASS_PROMPTS[class_id]
+
+                    )
+
+
+                else:
+
+
+                    prompts.append(
+
+                        "object"
+
+                    )
+
+
+
+                # =========================
+                # mask
+                # =========================
+
+
+                mask = torch.zeros(
 
                     self.img_size,
 
@@ -299,9 +395,12 @@ class YOLODataset(Dataset):
 
 
 
-                pts=polygon.numpy().astype(
+                pts = polygon.numpy().astype(
+
                     "int32"
+
                 )
+
 
 
                 cv2.fillPoly(
@@ -317,33 +416,40 @@ class YOLODataset(Dataset):
                 )
 
 
+
                 masks.append(
                     mask
                 )
 
 
 
-        # =====================
+        # =================================
         # empty target
-        # =====================
+        # =================================
 
 
         if len(boxes)==0:
 
 
-            boxes=torch.zeros(
+            boxes = torch.zeros(
+
                 (0,4),
+
                 dtype=torch.float32
+
             )
 
 
-            cls=torch.zeros(
+            cls = torch.zeros(
+
                 (0,1),
+
                 dtype=torch.float32
+
             )
 
 
-            masks=torch.zeros(
+            masks = torch.zeros(
 
                 0,
 
@@ -354,23 +460,35 @@ class YOLODataset(Dataset):
             )
 
 
+            prompts = []
+
+
+
         else:
 
 
-            boxes=torch.tensor(
+            boxes = torch.tensor(
+
                 boxes,
+
                 dtype=torch.float32
+
             )
 
 
-            cls=torch.tensor(
+            cls = torch.tensor(
+
                 cls,
+
                 dtype=torch.float32
+
             )
 
 
-            masks=torch.stack(
+            masks = torch.stack(
+
                 masks
+
             )
 
 
@@ -398,64 +516,144 @@ class YOLODataset(Dataset):
             masks,
 
 
+            "prompts":
+
+            prompts,
+
+
             "batch_idx":
 
             torch.zeros(
+
                 len(cls),
+
                 dtype=torch.long
+
             )
 
         }
 
+
+
+    # =====================================
+    # collate
+    # =====================================
+
+
     @staticmethod
     def collate_fn(batch):
 
+
         new_batch = {}
+
+
 
         keys = batch[0].keys()
 
+
+
         for key in keys:
 
+
+
             values = [
+
                 x[key]
+
                 for x in batch
+
             ]
+
+
 
             if key == "img":
 
+
                 new_batch[key] = torch.stack(
+
                     values,
+
                     0
+
                 )
+
 
 
             elif key in [
+
                 "cls",
+
                 "bboxes",
+
                 "masks"
+
             ]:
 
+
                 new_batch[key] = torch.cat(
+
                     values,
+
                     0
+
                 )
+
 
 
             elif key == "batch_idx":
 
+
                 batch_idx = []
 
-                for i, v in enumerate(values):
+
+
+                for i,v in enumerate(values):
+
+
                     batch_idx.append(
+
                         torch.full_like(
+
                             v,
+
                             i
+
                         )
+
                     )
 
+
+
                 new_batch[key] = torch.cat(
+
                     batch_idx,
+
                     0
+
                 )
+
+
+
+            elif key == "prompts":
+
+
+                #
+                # list[str]
+                #
+
+                prompts = []
+
+
+                for p in values:
+
+
+                    prompts.extend(
+                        p
+                    )
+
+
+                new_batch[key] = prompts
+
+
 
         return new_batch

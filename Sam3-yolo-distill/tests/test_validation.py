@@ -15,14 +15,12 @@ from validation.evaluator import DistillEvaluator
 
 
 IMAGE_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/images/train"
+"/home/chenkejing/database/test/data/images/train"
 )
 
 
 LABEL_DIR = (
-"/data/ultralytics/"
-"Sam3-yolo-distill/tests/data/labels/train"
+"/home/chenkejing/database/test/data/labels/train"
 )
 
 

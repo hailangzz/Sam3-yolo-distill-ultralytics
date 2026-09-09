@@ -100,8 +100,8 @@ result = trainer.train_step(
 print(result)
 
 """
-cd /data/ultralytics/Sam3-yolo-distill
+cd /data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill
 
-PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill \
+PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill \
 python tests/test_loss_pipeline.py
 """

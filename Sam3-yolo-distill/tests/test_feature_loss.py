@@ -81,4 +81,4 @@ for x in student:
         x.grad is not None
     )
 
-# PYTHONPATH=/data/ultralytics:/data/ultralytics/Sam3-yolo-distill python tests/test_feature_loss.py
+# PYTHONPATH=/data/Sam3-yolo-distill-ultralytics:/data/Sam3-yolo-distill-ultralytics/Sam3-yolo-distill python tests/test_feature_loss.py
