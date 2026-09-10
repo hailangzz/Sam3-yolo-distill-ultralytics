@@ -4,5 +4,10 @@ train: images/train
 val: images/val
 
 
+nc: 4
+
 names:
   0: carpet
+  1: wire
+  2: liquid
+  3: plasticbag
