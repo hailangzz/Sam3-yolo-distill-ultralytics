@@ -293,7 +293,8 @@ def create_trainer():
 
         lambda_feature=1.0,
 
-        device=DEVICE
+        device=DEVICE,
+        debug=False,
 
     )
 
