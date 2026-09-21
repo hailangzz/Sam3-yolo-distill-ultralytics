@@ -11,7 +11,7 @@ SAM3 批量自动标注
 4. 将 SAM3 Mask 转换为 YOLO Segmentation Label
 5. 有检测目标：
    - 生成 .txt Label
-   - 将 Label 路径写入 info 文件
+   - 将 Label 路径 + 检测到的 Prompt 写入 info 文件
 6. 无检测目标：
    - 不生成 .txt Label
    - 不写入 info 文件
@@ -155,7 +155,17 @@ def load_existing_label_paths():
             if not path:
                 continue
 
-            existing_paths.add(path)
+            # ------------------------------------------------
+            # 这里兼容新的 info 格式：
+            #
+            # /xxx/xxx.txt:person,rug or carpet
+            #
+            # 判断是否已经存在时，只取 ":" 前面的 Label 路径
+            # ------------------------------------------------
+
+            label_path = path.split(":", 1)[0].strip()
+
+            existing_paths.add(label_path)
 
     return existing_paths
 
@@ -342,6 +352,86 @@ def masks_to_yolo_labels(
 
 
 # ============================================================
+# 获取当前图片检测到的 Prompt
+# ============================================================
+
+def get_detected_prompts(result):
+    """
+    获取当前 SAM3 Result 中实际检测到的 Prompt。
+
+    SAM3 的 boxes.cls 中保存的是类别 ID：
+
+        0 -> TEXT_PROMPTS[0]
+        1 -> TEXT_PROMPTS[1]
+        2 -> TEXT_PROMPTS[2]
+        ...
+
+    返回：
+        当前图片实际检测到的 Prompt 字符串列表。
+
+    例如：
+
+        [
+            "person",
+            "rug or carpet"
+        ]
+
+    如果没有检测到目标：
+
+        []
+    """
+
+    detected_prompts = []
+
+    if result is None:
+        return detected_prompts
+
+    boxes = getattr(
+        result,
+        "boxes",
+        None
+    )
+
+    if boxes is None:
+        return detected_prompts
+
+    classes = getattr(
+        boxes,
+        "cls",
+        None
+    )
+
+    if classes is None:
+        return detected_prompts
+
+    try:
+        class_ids = classes.cpu().numpy().astype(int)
+    except Exception:
+        class_ids = classes.numpy().astype(int)
+
+    # --------------------------------------------------------
+    # 去重，同时保持 TEXT_PROMPTS 中的类别顺序
+    # --------------------------------------------------------
+
+    detected_class_ids = set(
+        int(class_id)
+        for class_id in class_ids
+    )
+
+    for class_id, prompt in enumerate(
+        TEXT_PROMPTS
+    ):
+
+        if class_id in detected_class_ids:
+
+            detected_prompts.append(
+                prompt
+            )
+
+    return detected_prompts
+
+
+# ============================================================
 # 处理单张图片
 # ============================================================
 
@@ -355,7 +445,7 @@ def process_one_image(
 
     返回：
 
-        label_path, status
+        label_path, detected_prompts, status
 
     status：
 
@@ -373,7 +463,7 @@ def process_one_image(
                 f"[WARNING] 图片不存在：{image_path}"
             )
 
-            return None, "failed"
+            return None, [], "failed"
 
         label_path = get_label_path(
             image_path
@@ -391,7 +481,7 @@ def process_one_image(
                     f"[SKIP] Label 已存在：{label_path}"
                 )
 
-                return label_path, "skip"
+                return label_path, [], "skip"
 
             if str(label_path) in existing_label_paths:
 
@@ -399,7 +489,7 @@ def process_one_image(
                     f"[SKIP] Info 中已存在记录：{label_path}"
                 )
 
-                return label_path, "skip"
+                return label_path, [], "skip"
 
         # ----------------------------------------------------
         # SAM3 推理
@@ -431,7 +521,7 @@ def process_one_image(
                 "[INFO] 不生成 Label 文件"
             )
 
-            return None, "no_target"
+            return None, [], "no_target"
 
         # 通常这里是 list
         if not isinstance(
@@ -442,6 +532,12 @@ def process_one_image(
             results = [results]
 
         all_labels = []
+
+        # ----------------------------------------------------
+        # 保存当前图片检测到的 Prompt
+        # ----------------------------------------------------
+
+        all_detected_prompts = []
 
         for result in results:
 
@@ -460,6 +556,22 @@ def process_one_image(
 
             all_labels.extend(labels)
 
+            # ------------------------------------------------
+            # 获取检测到的 Prompt
+            # ------------------------------------------------
+
+            detected_prompts = (
+                get_detected_prompts(result)
+            )
+
+            for prompt in detected_prompts:
+
+                if prompt not in all_detected_prompts:
+
+                    all_detected_prompts.append(
+                        prompt
+                    )
+
         # ----------------------------------------------------
         # 没有检测到目标
         # ----------------------------------------------------
@@ -474,7 +586,7 @@ def process_one_image(
                 "[INFO] 不生成 Label 文件"
             )
 
-            return None, "no_target"
+            return None, [], "no_target"
 
         # ----------------------------------------------------
         # 生成 Label
@@ -504,7 +616,16 @@ def process_one_image(
             f"[SUCCESS] 检测目标数量：{len(all_labels)}"
         )
 
-        return label_path, "success"
+        print(
+            f"[SUCCESS] 检测到的 Prompt："
+            f"{all_detected_prompts}"
+        )
+
+        return (
+            label_path,
+            all_detected_prompts,
+            "success"
+        )
 
     except Exception as e:
 
@@ -519,7 +640,7 @@ def process_one_image(
         # 打印完整 traceback
         traceback.print_exc()
 
-        return None, "failed"
+        return None, [], "failed"
 
 
 # ============================================================
@@ -660,14 +781,16 @@ def main():
             # 单张图片处理
             # ------------------------------------------------
 
-            label_path, status = (
-                process_one_image(
-                    predictor=predictor,
-                    image_path=image_path,
-                    existing_label_paths=(
-                        existing_label_paths
-                    ),
-                )
+            (
+                label_path,
+                detected_prompts,
+                status
+            ) = process_one_image(
+                predictor=predictor,
+                image_path=image_path,
+                existing_label_paths=(
+                    existing_label_paths
+                ),
             )
 
             # ------------------------------------------------
@@ -678,10 +801,21 @@ def main():
 
                 success_count += 1
 
-                # 只有真正生成了 Label
-                # 才写入 Info 文件
+                # ------------------------------------------------
+                # 生成 Info 记录
+                #
+                # 格式：
+                #
+                # /xxx/xxx.txt:person,rug or carpet
+                #
+                # ------------------------------------------------
+
+                prompt_info = ",".join(
+                    detected_prompts
+                )
+
                 info_file.write(
-                    f"{label_path}\n"
+                    f"{label_path}:{prompt_info}\n"
                 )
 
                 # 立即 flush
@@ -829,7 +963,7 @@ prompt_string = "_".join(TEXT_PROMPTS)
 
 INFO_OUTPUT_FILE = (
     TOTAL_IMAGES_INFO.parent
-    / f"total_text_{prompt_string}_Sam3_auto_labels_save_info.txt"
+    / f"total_{prompt_string}_Sam3_auto_labels_save_info.txt"
 )
 
 
