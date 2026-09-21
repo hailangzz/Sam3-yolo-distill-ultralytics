@@ -18,6 +18,20 @@ SAM3 批量自动标注
 7. 已存在 Label 的图片可以跳过
 8. 单张图片异常不会影响后续图片
 9. 最后输出处理统计信息
+10. 新增目标结构筛选：
+    - rug or carpet
+    - Cables or wires on the ground
+    - Plastic sheets or plastic bags on the ground
+
+    对以上三类目标：
+        y_center = (y_min + y_max) / 2
+
+    如果：
+        y_center < image_height / 2
+
+    则过滤该目标，不作为有效 Mask。
+
+    person 不参与该过滤。
 """
 
 import traceback
@@ -156,16 +170,21 @@ def load_existing_label_paths():
                 continue
 
             # ------------------------------------------------
-            # 这里兼容新的 info 格式：
+            # 兼容：
             #
             # /xxx/xxx.txt:person,rug or carpet
             #
             # 判断是否已经存在时，只取 ":" 前面的 Label 路径
             # ------------------------------------------------
 
-            label_path = path.split(":", 1)[0].strip()
+            label_path = path.split(
+                ":",
+                1
+            )[0].strip()
 
-            existing_paths.add(label_path)
+            existing_paths.add(
+                label_path
+            )
 
     return existing_paths
 
@@ -197,14 +216,20 @@ def get_label_path(image_path):
         exist_ok=True
     )
 
-    return LABEL_OUTPUT_DIR / f"{image_path.stem}.txt"
+    return (
+        LABEL_OUTPUT_DIR
+        / f"{image_path.stem}.txt"
+    )
 
 
 # ============================================================
 # 获取图片尺寸
 # ============================================================
 
-def get_image_size(image_path, result=None):
+def get_image_size(
+    image_path,
+    result=None
+):
     """
     获取图片原始尺寸。
 
@@ -213,6 +238,7 @@ def get_image_size(image_path, result=None):
     """
 
     if result is not None:
+
         orig_shape = getattr(
             result,
             "orig_shape",
@@ -220,14 +246,161 @@ def get_image_size(image_path, result=None):
         )
 
         if orig_shape is not None:
-            height, width = orig_shape[:2]
 
-            return int(width), int(height)
+            height, width = (
+                orig_shape[:2]
+            )
 
-    with Image.open(image_path) as image:
+            return (
+                int(width),
+                int(height)
+            )
+
+    with Image.open(
+        image_path
+    ) as image:
+
         width, height = image.size
 
     return width, height
+
+
+# ============================================================
+# 新增：判断单个目标是否应该被过滤
+# ============================================================
+
+def should_filter_target(
+    polygon,
+    class_id,
+    image_height,
+):
+    """
+    判断当前 Mask 目标是否应该被过滤。
+
+    过滤规则：
+
+    仅针对：
+
+        rug or carpet
+        Cables or wires on the ground
+        Plastic sheets or plastic bags on the ground
+
+    计算：
+
+        y_min = Mask Polygon 中最小 y
+        y_max = Mask Polygon 中最大 y
+
+        y_center = (y_min + y_max) / 2
+
+    如果：
+
+        y_center < image_height / 2
+
+    则过滤。
+
+    person 不参与过滤。
+
+    返回：
+
+        True  -> 过滤
+        False -> 保留
+    """
+
+    # --------------------------------------------------------
+    # class_id 对应 TEXT_PROMPTS
+    # --------------------------------------------------------
+
+    if class_id < 0:
+        return False
+
+    if class_id >= len(TEXT_PROMPTS):
+        return False
+
+    prompt = TEXT_PROMPTS[class_id]
+
+    # --------------------------------------------------------
+    # 不属于需要过滤的目标
+    # 例如 person
+    # --------------------------------------------------------
+
+    if prompt not in FILTER_PROMPTS:
+        return False
+
+    # --------------------------------------------------------
+    # Polygon 无效
+    # --------------------------------------------------------
+
+    if polygon is None:
+        return False
+
+    if len(polygon) < 3:
+        return False
+
+    # --------------------------------------------------------
+    # 提取所有 y
+    # --------------------------------------------------------
+
+    y_values = []
+
+    for point in polygon:
+
+        if point is None:
+            continue
+
+        if len(point) < 2:
+            continue
+
+        y = float(point[1])
+
+        y_values.append(y)
+
+    if not y_values:
+        return False
+
+    # --------------------------------------------------------
+    # 计算 Mask 的 y 最小值、最大值
+    # --------------------------------------------------------
+
+    y_min = min(y_values)
+    y_max = max(y_values)
+
+    # --------------------------------------------------------
+    # 计算 Mask 的上下边界中心点
+    # --------------------------------------------------------
+
+    mask_y_center = (
+        y_min + y_max
+    ) / 2.0
+
+    # --------------------------------------------------------
+    # 图像中心 y
+    # --------------------------------------------------------
+
+    image_y_center = (
+        image_height / 2.0
+    )
+
+    # --------------------------------------------------------
+    # 判断是否过滤
+    # --------------------------------------------------------
+
+    if mask_y_center < image_y_center:
+
+        print(
+            "[FILTER] 过滤目标："
+            f"{prompt}"
+        )
+
+        print(
+            f"[FILTER] y_min={y_min:.2f}, "
+            f"y_max={y_max:.2f}, "
+            f"mask_y_center={mask_y_center:.2f}, "
+            f"image_y_center={image_y_center:.2f}"
+        )
+
+        return True
+
+    return False
 
 
 # ============================================================
@@ -249,6 +422,9 @@ def masks_to_yolo_labels(
     坐标归一化到：
 
         0 ~ 1
+
+    新增：
+        对指定目标执行结构筛选。
     """
 
     labels = []
@@ -296,12 +472,28 @@ def masks_to_yolo_labels(
 
     # 转 CPU / numpy
     try:
-        class_ids = classes.cpu().numpy().astype(int)
+
+        class_ids = (
+            classes
+            .cpu()
+            .numpy()
+            .astype(int)
+        )
+
     except Exception:
-        class_ids = classes.numpy().astype(int)
+
+        class_ids = (
+            classes
+            .numpy()
+            .astype(int)
+        )
 
     if len(polygons) == 0:
         return labels
+
+    # --------------------------------------------------------
+    # 遍历每一个 Mask
+    # --------------------------------------------------------
 
     for polygon, class_id in zip(
         polygons,
@@ -314,7 +506,29 @@ def masks_to_yolo_labels(
         if len(polygon) < 3:
             continue
 
-        line = [str(class_id)]
+        class_id = int(class_id)
+
+        # ----------------------------------------------------
+        # 新增：
+        # 目标结构过滤
+        # ----------------------------------------------------
+
+        if should_filter_target(
+            polygon=polygon,
+            class_id=class_id,
+            image_height=image_height,
+        ):
+
+            # 当前目标直接丢弃
+            continue
+
+        # ----------------------------------------------------
+        # 保留目标
+        # ----------------------------------------------------
+
+        line = [
+            str(class_id)
+        ]
 
         for point in polygon:
 
@@ -322,8 +536,13 @@ def masks_to_yolo_labels(
             y = float(point[1])
 
             # 归一化
-            x_norm = x / image_width
-            y_norm = y / image_height
+            x_norm = (
+                x / image_width
+            )
+
+            y_norm = (
+                y / image_height
+            )
 
             # 防止浮点误差超出 0~1
             x_norm = max(
@@ -355,9 +574,25 @@ def masks_to_yolo_labels(
 # 获取当前图片检测到的 Prompt
 # ============================================================
 
-def get_detected_prompts(result):
+def get_detected_prompts(
+    result,
+    image_height,
+):
     """
     获取当前 SAM3 Result 中实际检测到的 Prompt。
+
+    注意：
+    这里使用与 Mask Label 相同的过滤逻辑。
+
+    也就是说：
+
+        SAM3 检测到
+            ↓
+        目标结构过滤
+            ↓
+        只有最终保留的目标
+            ↓
+        才会写入 INFO_OUTPUT_FILE
 
     SAM3 的 boxes.cls 中保存的是类别 ID：
 
@@ -367,18 +602,7 @@ def get_detected_prompts(result):
         ...
 
     返回：
-        当前图片实际检测到的 Prompt 字符串列表。
-
-    例如：
-
-        [
-            "person",
-            "rug or carpet"
-        ]
-
-    如果没有检测到目标：
-
-        []
+        当前图片实际保留下来的 Prompt 字符串列表。
     """
 
     detected_prompts = []
@@ -392,7 +616,16 @@ def get_detected_prompts(result):
         None
     )
 
+    masks = getattr(
+        result,
+        "masks",
+        None
+    )
+
     if boxes is None:
+        return detected_prompts
+
+    if masks is None:
         return detected_prompts
 
     classes = getattr(
@@ -401,28 +634,71 @@ def get_detected_prompts(result):
         None
     )
 
+    polygons = getattr(
+        masks,
+        "xy",
+        None
+    )
+
     if classes is None:
         return detected_prompts
 
+    if polygons is None:
+        return detected_prompts
+
     try:
-        class_ids = classes.cpu().numpy().astype(int)
+
+        class_ids = (
+            classes
+            .cpu()
+            .numpy()
+            .astype(int)
+        )
+
     except Exception:
-        class_ids = classes.numpy().astype(int)
+
+        class_ids = (
+            classes
+            .numpy()
+            .astype(int)
+        )
 
     # --------------------------------------------------------
-    # 去重，同时保持 TEXT_PROMPTS 中的类别顺序
+    # 必须和 polygon 一一对应
     # --------------------------------------------------------
 
-    detected_class_ids = set(
-        int(class_id)
-        for class_id in class_ids
-    )
-
-    for class_id, prompt in enumerate(
-        TEXT_PROMPTS
+    for polygon, class_id in zip(
+        polygons,
+        class_ids
     ):
 
-        if class_id in detected_class_ids:
+        class_id = int(class_id)
+
+        # ----------------------------------------------------
+        # 如果这个目标因为结构原因被过滤，
+        # 那么 Prompt 也不能写入 Info。
+        # ----------------------------------------------------
+
+        if should_filter_target(
+            polygon=polygon,
+            class_id=class_id,
+            image_height=image_height,
+        ):
+            continue
+
+        # ----------------------------------------------------
+        # class_id 合法性检查
+        # ----------------------------------------------------
+
+        if class_id < 0:
+            continue
+
+        if class_id >= len(TEXT_PROMPTS):
+            continue
+
+        prompt = TEXT_PROMPTS[class_id]
+
+        if prompt not in detected_prompts:
 
             detected_prompts.append(
                 prompt
@@ -463,7 +739,11 @@ def process_one_image(
                 f"[WARNING] 图片不存在：{image_path}"
             )
 
-            return None, [], "failed"
+            return (
+                None,
+                [],
+                "failed"
+            )
 
         label_path = get_label_path(
             image_path
@@ -478,18 +758,28 @@ def process_one_image(
             if label_path.exists():
 
                 print(
-                    f"[SKIP] Label 已存在：{label_path}"
+                    f"[SKIP] Label 已存在："
+                    f"{label_path}"
                 )
 
-                return label_path, [], "skip"
+                return (
+                    label_path,
+                    [],
+                    "skip"
+                )
 
             if str(label_path) in existing_label_paths:
 
                 print(
-                    f"[SKIP] Info 中已存在记录：{label_path}"
+                    f"[SKIP] Info 中已存在记录："
+                    f"{label_path}"
                 )
 
-                return label_path, [], "skip"
+                return (
+                    label_path,
+                    [],
+                    "skip"
+                )
 
         # ----------------------------------------------------
         # SAM3 推理
@@ -521,7 +811,11 @@ def process_one_image(
                 "[INFO] 不生成 Label 文件"
             )
 
-            return None, [], "no_target"
+            return (
+                None,
+                [],
+                "no_target"
+            )
 
         # 通常这里是 list
         if not isinstance(
@@ -539,6 +833,10 @@ def process_one_image(
 
         all_detected_prompts = []
 
+        # ----------------------------------------------------
+        # 遍历 SAM3 Result
+        # ----------------------------------------------------
+
         for result in results:
 
             image_width, image_height = (
@@ -548,20 +846,31 @@ def process_one_image(
                 )
             )
 
+            # ------------------------------------------------
+            # Mask -> YOLO Label
+            #
+            # 这里已经包含目标结构过滤
+            # ------------------------------------------------
+
             labels = masks_to_yolo_labels(
                 result=result,
                 image_width=image_width,
                 image_height=image_height,
             )
 
-            all_labels.extend(labels)
+            all_labels.extend(
+                labels
+            )
 
             # ------------------------------------------------
-            # 获取检测到的 Prompt
+            # 获取经过结构过滤之后的 Prompt
             # ------------------------------------------------
 
             detected_prompts = (
-                get_detected_prompts(result)
+                get_detected_prompts(
+                    result=result,
+                    image_height=image_height,
+                )
             )
 
             for prompt in detected_prompts:
@@ -573,20 +882,43 @@ def process_one_image(
                     )
 
         # ----------------------------------------------------
-        # 没有检测到目标
+        # 没有检测到有效目标
+        #
+        # 注意：
+        # 这里的 all_labels 是经过结构过滤之后的结果。
+        #
+        # 因此可能出现：
+        #
+        # SAM3 原本检测到了目标
+        #       ↓
+        # 目标全部被结构规则过滤
+        #       ↓
+        # all_labels == []
+        #       ↓
+        # 不生成 Label
         # ----------------------------------------------------
 
         if not all_labels:
 
             print(
-                f"[INFO] 未检测到目标：{image_path}"
+                f"[INFO] 没有有效目标："
+                f"{image_path}"
+            )
+
+            print(
+                "[INFO] SAM3 检测目标可能全部"
+                "被结构筛选规则过滤"
             )
 
             print(
                 "[INFO] 不生成 Label 文件"
             )
 
-            return None, [], "no_target"
+            return (
+                None,
+                [],
+                "no_target"
+            )
 
         # ----------------------------------------------------
         # 生成 Label
@@ -609,15 +941,17 @@ def process_one_image(
             f.write("\n")
 
         print(
-            f"[SUCCESS] Label 已生成：{label_path}"
+            f"[SUCCESS] Label 已生成："
+            f"{label_path}"
         )
 
         print(
-            f"[SUCCESS] 检测目标数量：{len(all_labels)}"
+            f"[SUCCESS] 有效检测目标数量："
+            f"{len(all_labels)}"
         )
 
         print(
-            f"[SUCCESS] 检测到的 Prompt："
+            f"[SUCCESS] 有效 Prompt："
             f"{all_detected_prompts}"
         )
 
@@ -630,7 +964,8 @@ def process_one_image(
     except Exception as e:
 
         print(
-            f"\n[ERROR] 处理失败：{image_path}"
+            f"\n[ERROR] 处理失败："
+            f"{image_path}"
         )
 
         print(
@@ -640,7 +975,11 @@ def process_one_image(
         # 打印完整 traceback
         traceback.print_exc()
 
-        return None, [], "failed"
+        return (
+            None,
+            [],
+            "failed"
+        )
 
 
 # ============================================================
@@ -655,24 +994,52 @@ def main():
     print("=" * 80)
 
     print(
-        f"[INFO] 图片列表：{TOTAL_IMAGES_INFO}"
+        f"[INFO] 图片列表："
+        f"{TOTAL_IMAGES_INFO}"
     )
 
     print(
-        f"[INFO] Prompt：{TEXT_PROMPTS}"
+        f"[INFO] Prompt："
+        f"{TEXT_PROMPTS}"
     )
 
     print(
-        f"[INFO] Label 目录：{LABEL_OUTPUT_DIR}"
+        f"[INFO] Label 目录："
+        f"{LABEL_OUTPUT_DIR}"
     )
 
     print(
-        f"[INFO] Info 文件：{INFO_OUTPUT_FILE}"
+        f"[INFO] Info 文件："
+        f"{INFO_OUTPUT_FILE}"
     )
 
     print(
         f"[INFO] SKIP_EXISTING_LABEL："
         f"{SKIP_EXISTING_LABEL}"
+    )
+
+    print("=" * 80)
+
+    # --------------------------------------------------------
+    # 打印结构筛选规则
+    # --------------------------------------------------------
+
+    print(
+        "[INFO] 目标结构筛选："
+    )
+
+    print(
+        "[INFO] FILTER_PROMPTS："
+        f"{list(FILTER_PROMPTS)}"
+    )
+
+    print(
+        "[INFO] 筛选条件："
+        "(y_min + y_max) / 2 < image_height / 2"
+    )
+
+    print(
+        "[INFO] 满足条件的目标将被过滤"
     )
 
     print("=" * 80)
@@ -744,11 +1111,6 @@ def main():
 
     # --------------------------------------------------------
     # 打开 Info 文件
-    #
-    # 使用 append 模式。
-    # 每成功生成一个 Label 就立即写入。
-    # 即使中途程序异常退出，前面已经完成的数据
-    # 也不会全部丢失。
     # --------------------------------------------------------
 
     with INFO_OUTPUT_FILE.open(
@@ -834,7 +1196,7 @@ def main():
                 skip_count += 1
 
             # ------------------------------------------------
-            # 没有目标
+            # 没有有效目标
             # ------------------------------------------------
 
             elif status == "no_target":
@@ -879,23 +1241,28 @@ def main():
     print("=" * 80)
 
     print(
-        f"[RESULT] 总图片数：      {total_count}"
+        f"[RESULT] 总图片数："
+        f"{total_count}"
     )
 
     print(
-        f"[RESULT] 成功生成 Label： {success_count}"
+        f"[RESULT] 成功生成 Label："
+        f"{success_count}"
     )
 
     print(
-        f"[RESULT] 已存在跳过：     {skip_count}"
+        f"[RESULT] 已存在跳过："
+        f"{skip_count}"
     )
 
     print(
-        f"[RESULT] 无检测目标：     {no_target_count}"
+        f"[RESULT] 无有效目标："
+        f"{no_target_count}"
     )
 
     print(
-        f"[RESULT] 处理失败：       {failed_count}"
+        f"[RESULT] 处理失败："
+        f"{failed_count}"
     )
 
     print("-" * 80)
@@ -911,6 +1278,8 @@ def main():
     )
 
     print("=" * 80)
+
+
 
 # ============================================================
 # 配置
@@ -939,7 +1308,8 @@ TEXT_PROMPTS = [
     "person",
     "rug or carpet",
     "Cables or wires on the ground",
-    "Plastic sheets or plastic bags on the ground"
+    "Plastic sheets or plastic bags on the ground",
+    "Liquid stains on the ground"
 ]
 
 # 是否跳过已经存在的 Label
@@ -947,6 +1317,18 @@ SKIP_EXISTING_LABEL = True
 
 # SAM3 confidence
 CONF = 0.25
+
+
+# ============================================================
+# 新增：需要进行目标结构筛选的 Prompt
+# ============================================================
+
+FILTER_PROMPTS = {
+    "rug or carpet",
+    "Cables or wires on the floor",
+    "Plastic sheets or plastic bags on the floor",
+    "Liquid stains on the floor"
+}
 
 
 # ============================================================
@@ -973,3 +1355,4 @@ INFO_OUTPUT_FILE = (
 
 if __name__ == "__main__":
     main()
+
