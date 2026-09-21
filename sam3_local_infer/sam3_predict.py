@@ -46,8 +46,8 @@ def create_predictor():
         "task": "segment",
         "mode": "predict",
         "model": MODEL_PATH,
-        # "save": False,
-        "save": True,
+        "save": False,
+        # "save": True,
     }
 
     predictor = SAM3SemanticPredictor(
