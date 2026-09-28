@@ -60,10 +60,7 @@ import os
 #
 # 那么这里设置最方便。
 #
-os.environ.setdefault(
-    "PYTORCH_CUDA_ALLOC_CONF",
-    "expandable_segments:True"
-)
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 # ============================================================
@@ -84,6 +81,7 @@ from ultralytics.models.sam import SAM3SemanticPredictor
 # CUDA 显存工具
 # ============================================================
 
+
 def cleanup_cuda_memory(
     reason="",
 ):
@@ -101,9 +99,7 @@ def cleanup_cuda_memory(
     """
 
     if reason:
-        print(
-            f"[GPU] 开始清理显存：{reason}"
-        )
+        print(f"[GPU] 开始清理显存：{reason}")
 
     # --------------------------------------------------------
     # Python GC
@@ -131,9 +127,7 @@ def cleanup_cuda_memory(
             pass
 
     if reason:
-        print_gpu_memory(
-            prefix="清理完成"
-        )
+        print_gpu_memory(prefix="清理完成")
 
 
 def print_gpu_memory(
@@ -160,31 +154,18 @@ def print_gpu_memory(
 
     try:
 
-        allocated = (
-            torch.cuda.memory_allocated()
-            / 1024 ** 3
-        )
+        allocated = torch.cuda.memory_allocated() / 1024**3
 
-        reserved = (
-            torch.cuda.memory_reserved()
-            / 1024 ** 3
-        )
+        reserved = torch.cuda.memory_reserved() / 1024**3
 
-        max_allocated = (
-            torch.cuda.max_memory_allocated()
-            / 1024 ** 3
-        )
+        max_allocated = torch.cuda.max_memory_allocated() / 1024**3
 
-        free, total = (
-            torch.cuda.mem_get_info()
-        )
+        free, total = torch.cuda.mem_get_info()
 
-        free = free / 1024 ** 3
-        total = total / 1024 ** 3
+        free = free / 1024**3
+        total = total / 1024**3
 
-        cached = (
-            reserved - allocated
-        )
+        cached = reserved - allocated
 
         print(
             f"[GPU] {prefix} | "
@@ -198,9 +179,7 @@ def print_gpu_memory(
 
     except Exception as e:
 
-        print(
-            f"[GPU] 获取显存信息失败：{e}"
-        )
+        print(f"[GPU] 获取显存信息失败：{e}")
 
 
 def reset_gpu_peak_memory():
@@ -221,6 +200,7 @@ def reset_gpu_peak_memory():
 # 创建 SAM3 Predictor
 # ============================================================
 
+
 def create_predictor():
     """
     创建 SAM3 Semantic Predictor。
@@ -238,9 +218,7 @@ def create_predictor():
         "save": False,
     }
 
-    predictor = SAM3SemanticPredictor(
-        overrides=overrides
-    )
+    predictor = SAM3SemanticPredictor(overrides=overrides)
 
     # 必须单独设置
     predictor.bpe_path = BPE_PATH
@@ -251,6 +229,7 @@ def create_predictor():
 # ============================================================
 # 提前加载 SAM3 模型
 # ============================================================
+
 
 def warmup_predictor(
     predictor,
@@ -275,9 +254,7 @@ def warmup_predictor(
 
     print("[INFO] SAM3 模型加载完成")
 
-    print_gpu_memory(
-        prefix="模型加载完成"
-    )
+    print_gpu_memory(prefix="模型加载完成")
 
     print("=" * 80)
 
@@ -285,6 +262,7 @@ def warmup_predictor(
 # ============================================================
 # 读取图片路径
 # ============================================================
+
 
 def load_image_paths():
     """
@@ -300,17 +278,11 @@ def load_image_paths():
 
     if not TOTAL_IMAGES_INFO.exists():
 
-        raise FileNotFoundError(
-            f"图片路径信息文件不存在："
-            f"{TOTAL_IMAGES_INFO}"
-        )
+        raise FileNotFoundError(f"图片路径信息文件不存在：" f"{TOTAL_IMAGES_INFO}")
 
     image_paths = []
 
-    with TOTAL_IMAGES_INFO.open(
-        "r",
-        encoding="utf-8"
-    ) as f:
+    with TOTAL_IMAGES_INFO.open("r", encoding="utf-8") as f:
 
         for line in f:
 
@@ -319,14 +291,10 @@ def load_image_paths():
             if not image_path:
                 continue
 
-            image_paths.append(
-                Path(image_path)
-            )
+            image_paths.append(Path(image_path))
 
     # 去重，同时保持原始顺序
-    image_paths = list(
-        dict.fromkeys(image_paths)
-    )
+    image_paths = list(dict.fromkeys(image_paths))
 
     return image_paths
 
@@ -334,6 +302,7 @@ def load_image_paths():
 # ============================================================
 # 读取已经存在的 Label
 # ============================================================
+
 
 def load_existing_label_paths():
     """
@@ -347,10 +316,7 @@ def load_existing_label_paths():
     if not INFO_OUTPUT_FILE.exists():
         return existing_paths
 
-    with INFO_OUTPUT_FILE.open(
-        "r",
-        encoding="utf-8"
-    ) as f:
+    with INFO_OUTPUT_FILE.open("r", encoding="utf-8") as f:
 
         for line in f:
 
@@ -367,14 +333,9 @@ def load_existing_label_paths():
             # 判断是否已经存在时，只取 ":" 前面的 Label 路径
             # ------------------------------------------------
 
-            label_path = path.split(
-                ":",
-                1
-            )[0].strip()
+            label_path = path.split(":", 1)[0].strip()
 
-            existing_paths.add(
-                label_path
-            )
+            existing_paths.add(label_path)
 
     return existing_paths
 
@@ -383,6 +344,7 @@ def load_existing_label_paths():
 # 获取 Label 路径
 # ============================================================
 
+
 def get_label_path(
     image_path,
 ):
@@ -390,20 +352,15 @@ def get_label_path(
     根据图片路径生成 Label 路径。
     """
 
-    LABEL_OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    LABEL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    return (
-        LABEL_OUTPUT_DIR
-        / f"{image_path.stem}.txt"
-    )
+    return LABEL_OUTPUT_DIR / f"{image_path.stem}.txt"
 
 
 # ============================================================
 # 获取图片尺寸
 # ============================================================
+
 
 def get_image_size(
     image_path,
@@ -418,26 +375,15 @@ def get_image_size(
 
     if result is not None:
 
-        orig_shape = getattr(
-            result,
-            "orig_shape",
-            None
-        )
+        orig_shape = getattr(result, "orig_shape", None)
 
         if orig_shape is not None:
 
-            height, width = (
-                orig_shape[:2]
-            )
+            height, width = orig_shape[:2]
 
-            return (
-                int(width),
-                int(height)
-            )
+            return (int(width), int(height))
 
-    with Image.open(
-        image_path
-    ) as image:
+    with Image.open(image_path) as image:
 
         width, height = image.size
 
@@ -447,6 +393,7 @@ def get_image_size(
 # ============================================================
 # 判断单个目标是否应该被过滤
 # ============================================================
+
 
 def should_filter_target(
     polygon,
@@ -514,17 +461,13 @@ def should_filter_target(
     # Mask 中心
     # --------------------------------------------------------
 
-    mask_y_center = (
-        y_min + y_max
-    ) / 2.0
+    mask_y_center = (y_min + y_max) / 2.0
 
     # --------------------------------------------------------
     # Image 中心
     # --------------------------------------------------------
 
-    image_y_center = (
-        image_height / 2.0
-    )
+    image_y_center = image_height / 2.0
 
     # --------------------------------------------------------
     # 判断
@@ -532,10 +475,7 @@ def should_filter_target(
 
     if mask_y_center < image_y_center:
 
-        print(
-            "[FILTER] 过滤目标："
-            f"{prompt}"
-        )
+        print("[FILTER] 过滤目标：" f"{prompt}")
 
         print(
             f"[FILTER] y_min={y_min:.2f}, "
@@ -552,6 +492,7 @@ def should_filter_target(
 # ============================================================
 # SAM3 Mask -> YOLO Segmentation
 # ============================================================
+
 
 def masks_to_yolo_labels(
     result,
@@ -573,17 +514,9 @@ def masks_to_yolo_labels(
     if result is None:
         return labels
 
-    masks = getattr(
-        result,
-        "masks",
-        None
-    )
+    masks = getattr(result, "masks", None)
 
-    boxes = getattr(
-        result,
-        "boxes",
-        None
-    )
+    boxes = getattr(result, "boxes", None)
 
     if masks is None:
         return labels
@@ -591,17 +524,9 @@ def masks_to_yolo_labels(
     if boxes is None:
         return labels
 
-    polygons = getattr(
-        masks,
-        "xy",
-        None
-    )
+    polygons = getattr(masks, "xy", None)
 
-    classes = getattr(
-        boxes,
-        "cls",
-        None
-    )
+    classes = getattr(boxes, "cls", None)
 
     if polygons is None:
         return labels
@@ -611,20 +536,11 @@ def masks_to_yolo_labels(
 
     try:
 
-        class_ids = (
-            classes
-            .cpu()
-            .numpy()
-            .astype(int)
-        )
+        class_ids = classes.cpu().numpy().astype(int)
 
     except Exception:
 
-        class_ids = (
-            classes
-            .numpy()
-            .astype(int)
-        )
+        class_ids = classes.numpy().astype(int)
 
     if len(polygons) == 0:
         return labels
@@ -633,10 +549,7 @@ def masks_to_yolo_labels(
     # 遍历每一个 Mask
     # --------------------------------------------------------
 
-    for polygon, class_id in zip(
-        polygons,
-        class_ids
-    ):
+    for polygon, class_id in zip(polygons, class_ids):
 
         if polygon is None:
             continue
@@ -644,9 +557,7 @@ def masks_to_yolo_labels(
         if len(polygon) < 3:
             continue
 
-        class_id = int(
-            class_id
-        )
+        class_id = int(class_id)
 
         # ----------------------------------------------------
         # 结构过滤
@@ -664,44 +575,26 @@ def masks_to_yolo_labels(
         # 生成 YOLO Label
         # ----------------------------------------------------
 
-        line = [
-            str(class_id)
-        ]
+        line = [str(class_id)]
 
         for point in polygon:
 
             x = float(point[0])
             y = float(point[1])
 
-            x_norm = (
-                x / image_width
-            )
+            x_norm = x / image_width
 
-            y_norm = (
-                y / image_height
-            )
+            y_norm = y / image_height
 
-            x_norm = max(
-                0.0,
-                min(1.0, x_norm)
-            )
+            x_norm = max(0.0, min(1.0, x_norm))
 
-            y_norm = max(
-                0.0,
-                min(1.0, y_norm)
-            )
+            y_norm = max(0.0, min(1.0, y_norm))
 
-            line.append(
-                f"{x_norm:.6f}"
-            )
+            line.append(f"{x_norm:.6f}")
 
-            line.append(
-                f"{y_norm:.6f}"
-            )
+            line.append(f"{y_norm:.6f}")
 
-        labels.append(
-            " ".join(line)
-        )
+        labels.append(" ".join(line))
 
     return labels
 
@@ -709,6 +602,7 @@ def masks_to_yolo_labels(
 # ============================================================
 # 获取当前图片检测到的 Prompt
 # ============================================================
+
 
 def get_detected_prompts(
     result,
@@ -723,17 +617,9 @@ def get_detected_prompts(
     if result is None:
         return detected_prompts
 
-    boxes = getattr(
-        result,
-        "boxes",
-        None
-    )
+    boxes = getattr(result, "boxes", None)
 
-    masks = getattr(
-        result,
-        "masks",
-        None
-    )
+    masks = getattr(result, "masks", None)
 
     if boxes is None:
         return detected_prompts
@@ -741,17 +627,9 @@ def get_detected_prompts(
     if masks is None:
         return detected_prompts
 
-    classes = getattr(
-        boxes,
-        "cls",
-        None
-    )
+    classes = getattr(boxes, "cls", None)
 
-    polygons = getattr(
-        masks,
-        "xy",
-        None
-    )
+    polygons = getattr(masks, "xy", None)
 
     if classes is None:
         return detected_prompts
@@ -761,29 +639,15 @@ def get_detected_prompts(
 
     try:
 
-        class_ids = (
-            classes
-            .cpu()
-            .numpy()
-            .astype(int)
-        )
+        class_ids = classes.cpu().numpy().astype(int)
 
     except Exception:
 
-        class_ids = (
-            classes
-            .numpy()
-            .astype(int)
-        )
+        class_ids = classes.numpy().astype(int)
 
-    for polygon, class_id in zip(
-        polygons,
-        class_ids
-    ):
+    for polygon, class_id in zip(polygons, class_ids):
 
-        class_id = int(
-            class_id
-        )
+        class_id = int(class_id)
 
         # ----------------------------------------------------
         # 结构过滤
@@ -807,9 +671,7 @@ def get_detected_prompts(
 
         if prompt not in detected_prompts:
 
-            detected_prompts.append(
-                prompt
-            )
+            detected_prompts.append(prompt)
 
     return detected_prompts
 
@@ -817,6 +679,7 @@ def get_detected_prompts(
 # ============================================================
 # SAM3 单次推理
 # ============================================================
+
 
 def run_sam3_inference(
     predictor,
@@ -828,9 +691,7 @@ def run_sam3_inference(
     使用 inference_mode，确保不会建立 autograd graph。
     """
 
-    predictor.set_image(
-        str(image_path)
-    )
+    predictor.set_image(str(image_path))
 
     # --------------------------------------------------------
     # 关键：
@@ -839,9 +700,7 @@ def run_sam3_inference(
 
     with torch.inference_mode():
 
-        results = predictor(
-            text=TEXT_PROMPTS
-        )
+        results = predictor(text=TEXT_PROMPTS)
 
     return results
 
@@ -849,6 +708,7 @@ def run_sam3_inference(
 # ============================================================
 # 处理单张图片
 # ============================================================
+
 
 def process_one_image(
     predictor,
@@ -876,20 +736,11 @@ def process_one_image(
 
         if not image_path.exists():
 
-            print(
-                f"[WARNING] 图片不存在："
-                f"{image_path}"
-            )
+            print(f"[WARNING] 图片不存在：" f"{image_path}")
 
-            return (
-                None,
-                [],
-                "failed"
-            )
+            return (None, [], "failed")
 
-        label_path = get_label_path(
-            image_path
-        )
+        label_path = get_label_path(image_path)
 
         # ----------------------------------------------------
         # 已经存在 Label
@@ -899,37 +750,21 @@ def process_one_image(
 
             if label_path.exists():
 
-                print(
-                    f"[SKIP] Label 已存在："
-                    f"{label_path}"
-                )
+                print(f"[SKIP] Label 已存在：" f"{label_path}")
 
-                return (
-                    label_path,
-                    [],
-                    "skip"
-                )
+                return (label_path, [], "skip")
 
             if str(label_path) in existing_label_paths:
 
-                print(
-                    f"[SKIP] Info 中已存在记录："
-                    f"{label_path}"
-                )
+                print(f"[SKIP] Info 中已存在记录：" f"{label_path}")
 
-                return (
-                    label_path,
-                    [],
-                    "skip"
-                )
+                return (label_path, [], "skip")
 
         # ----------------------------------------------------
         # SAM3 推理
         # ----------------------------------------------------
 
-        print(
-            f"\n[PROCESS] {image_path}"
-        )
+        print(f"\n[PROCESS] {image_path}")
 
         results = run_sam3_inference(
             predictor=predictor,
@@ -942,24 +777,15 @@ def process_one_image(
 
         if results is None:
 
-            print(
-                "[INFO] SAM3 没有返回结果"
-            )
+            print("[INFO] SAM3 没有返回结果")
 
-            return (
-                None,
-                [],
-                "no_target"
-            )
+            return (None, [], "no_target")
 
         # ----------------------------------------------------
         # 统一成 list
         # ----------------------------------------------------
 
-        if not isinstance(
-            results,
-            (list, tuple)
-        ):
+        if not isinstance(results, (list, tuple)):
 
             results = [results]
 
@@ -973,12 +799,7 @@ def process_one_image(
 
         for result in results:
 
-            image_width, image_height = (
-                get_image_size(
-                    image_path,
-                    result
-                )
-            )
+            image_width, image_height = get_image_size(image_path, result)
 
             labels = masks_to_yolo_labels(
                 result=result,
@@ -986,24 +807,18 @@ def process_one_image(
                 image_height=image_height,
             )
 
-            all_labels.extend(
-                labels
-            )
+            all_labels.extend(labels)
 
-            detected_prompts = (
-                get_detected_prompts(
-                    result=result,
-                    image_height=image_height,
-                )
+            detected_prompts = get_detected_prompts(
+                result=result,
+                image_height=image_height,
             )
 
             for prompt in detected_prompts:
 
                 if prompt not in all_detected_prompts:
 
-                    all_detected_prompts.append(
-                        prompt
-                    )
+                    all_detected_prompts.append(prompt)
 
         # ----------------------------------------------------
         # 立即删除 SAM3 Results
@@ -1025,62 +840,31 @@ def process_one_image(
 
         if not all_labels:
 
-            print(
-                f"[INFO] 没有有效目标："
-                f"{image_path}"
-            )
+            print(f"[INFO] 没有有效目标：" f"{image_path}")
 
-            print(
-                "[INFO] SAM3 检测目标可能全部"
-                "被结构筛选规则过滤"
-            )
+            print("[INFO] SAM3 检测目标可能全部" "被结构筛选规则过滤")
 
-            return (
-                None,
-                [],
-                "no_target"
-            )
+            return (None, [], "no_target")
 
         # ----------------------------------------------------
         # 生成 Label
         # ----------------------------------------------------
 
-        LABEL_OUTPUT_DIR.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+        LABEL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-        with label_path.open(
-            "w",
-            encoding="utf-8"
-        ) as f:
+        with label_path.open("w", encoding="utf-8") as f:
 
-            f.write(
-                "\n".join(all_labels)
-            )
+            f.write("\n".join(all_labels))
 
             f.write("\n")
 
-        print(
-            f"[SUCCESS] Label 已生成："
-            f"{label_path}"
-        )
+        print(f"[SUCCESS] Label 已生成：" f"{label_path}")
 
-        print(
-            f"[SUCCESS] 有效检测目标数量："
-            f"{len(all_labels)}"
-        )
+        print(f"[SUCCESS] 有效检测目标数量：" f"{len(all_labels)}")
 
-        print(
-            f"[SUCCESS] 有效 Prompt："
-            f"{all_detected_prompts}"
-        )
+        print(f"[SUCCESS] 有效 Prompt：" f"{all_detected_prompts}")
 
-        return (
-            label_path,
-            all_detected_prompts,
-            "success"
-        )
+        return (label_path, all_detected_prompts, "success")
 
     except torch.cuda.OutOfMemoryError:
 
@@ -1088,14 +872,9 @@ def process_one_image(
         # CUDA OOM
         # ----------------------------------------------------
 
-        print(
-            "\n[CUDA OOM] 当前图片推理发生显存不足："
-            f"{image_path}"
-        )
+        print("\n[CUDA OOM] 当前图片推理发生显存不足：" f"{image_path}")
 
-        print_gpu_memory(
-            prefix="OOM 发生时"
-        )
+        print_gpu_memory(prefix="OOM 发生时")
 
         # ----------------------------------------------------
         # 删除当前 Results
@@ -1107,9 +886,7 @@ def process_one_image(
         # 清理 CUDA Cache
         # ----------------------------------------------------
 
-        cleanup_cuda_memory(
-            reason="CUDA OOM"
-        )
+        cleanup_cuda_memory(reason="CUDA OOM")
 
         # ----------------------------------------------------
         # 不在这里直接重试。
@@ -1118,30 +895,17 @@ def process_one_image(
         # 避免 process_one_image 内部无限重试。
         # ----------------------------------------------------
 
-        return (
-            None,
-            [],
-            "cuda_oom"
-        )
+        return (None, [], "cuda_oom")
 
     except Exception as e:
 
-        print(
-            f"\n[ERROR] 处理失败："
-            f"{image_path}"
-        )
+        print(f"\n[ERROR] 处理失败：" f"{image_path}")
 
-        print(
-            f"[ERROR] {type(e).__name__}: {e}"
-        )
+        print(f"[ERROR] {type(e).__name__}: {e}")
 
         traceback.print_exc()
 
-        return (
-            None,
-            [],
-            "failed"
-        )
+        return (None, [], "failed")
 
     finally:
 
@@ -1159,6 +923,7 @@ def process_one_image(
 # ============================================================
 # CUDA OOM 重试
 # ============================================================
+
 
 def process_one_image_with_retry(
     predictor,
@@ -1181,44 +946,24 @@ def process_one_image_with_retry(
         不重试。
     """
 
-    for attempt in range(
-        max_retries + 1
-    ):
+    for attempt in range(max_retries + 1):
 
         if attempt > 0:
 
-            print(
-                "\n"
-                + "=" * 80
-            )
+            print("\n" + "=" * 80)
 
-            print(
-                f"[RETRY] CUDA OOM 后重新尝试："
-                f"{image_path}"
-            )
+            print(f"[RETRY] CUDA OOM 后重新尝试：" f"{image_path}")
 
-            print(
-                f"[RETRY] 第 {attempt} 次重试"
-            )
+            print(f"[RETRY] 第 {attempt} 次重试")
 
-            print(
-                "=" * 80
-            )
+            print("=" * 80)
 
-            cleanup_cuda_memory(
-                reason=f"第 {attempt} 次 OOM 重试前"
-            )
+            cleanup_cuda_memory(reason=f"第 {attempt} 次 OOM 重试前")
 
-        (
-            label_path,
-            detected_prompts,
-            status
-        ) = process_one_image(
+        (label_path, detected_prompts, status) = process_one_image(
             predictor=predictor,
             image_path=image_path,
-            existing_label_paths=(
-                existing_label_paths
-            ),
+            existing_label_paths=(existing_label_paths),
         )
 
         # ----------------------------------------------------
@@ -1227,43 +972,29 @@ def process_one_image_with_retry(
 
         if status != "cuda_oom":
 
-            return (
-                label_path,
-                detected_prompts,
-                status
-            )
+            return (label_path, detected_prompts, status)
 
         # ----------------------------------------------------
         # OOM
         # ----------------------------------------------------
 
-        print(
-            f"[OOM] 第 {attempt + 1} 次推理 OOM"
-        )
+        print(f"[OOM] 第 {attempt + 1} 次推理 OOM")
 
-        cleanup_cuda_memory(
-            reason="OOM 后清理"
-        )
+        cleanup_cuda_memory(reason="OOM 后清理")
 
     # --------------------------------------------------------
     # 所有重试都失败
     # --------------------------------------------------------
 
-    print(
-        f"[ERROR] CUDA OOM 重试仍然失败："
-        f"{image_path}"
-    )
+    print(f"[ERROR] CUDA OOM 重试仍然失败：" f"{image_path}")
 
-    return (
-        None,
-        [],
-        "failed"
-    )
+    return (None, [], "failed")
 
 
 # ============================================================
 # 主函数
 # ============================================================
+
 
 def main():
 
@@ -1272,30 +1003,15 @@ def main():
     print("SAM3 批量自动标注")
     print("=" * 80)
 
-    print(
-        f"[INFO] 图片列表："
-        f"{TOTAL_IMAGES_INFO}"
-    )
+    print(f"[INFO] 图片列表：" f"{TOTAL_IMAGES_INFO}")
 
-    print(
-        f"[INFO] Prompt："
-        f"{TEXT_PROMPTS}"
-    )
+    print(f"[INFO] Prompt：" f"{TEXT_PROMPTS}")
 
-    print(
-        f"[INFO] Label 目录："
-        f"{LABEL_OUTPUT_DIR}"
-    )
+    print(f"[INFO] Label 目录：" f"{LABEL_OUTPUT_DIR}")
 
-    print(
-        f"[INFO] Info 文件："
-        f"{INFO_OUTPUT_FILE}"
-    )
+    print(f"[INFO] Info 文件：" f"{INFO_OUTPUT_FILE}")
 
-    print(
-        f"[INFO] SKIP_EXISTING_LABEL："
-        f"{SKIP_EXISTING_LABEL}"
-    )
+    print(f"[INFO] SKIP_EXISTING_LABEL：" f"{SKIP_EXISTING_LABEL}")
 
     print("=" * 80)
 
@@ -1303,10 +1019,7 @@ def main():
     # 显存配置
     # --------------------------------------------------------
 
-    print(
-        "[INFO] CUDA allocator："
-        f"{os.environ.get('PYTORCH_CUDA_ALLOC_CONF')}"
-    )
+    print("[INFO] CUDA allocator：" f"{os.environ.get('PYTORCH_CUDA_ALLOC_CONF')}")
 
     print("=" * 80)
 
@@ -1314,23 +1027,13 @@ def main():
     # 结构筛选规则
     # --------------------------------------------------------
 
-    print(
-        "[INFO] 目标结构筛选："
-    )
+    print("[INFO] 目标结构筛选：")
 
-    print(
-        "[INFO] FILTER_PROMPTS："
-        f"{list(FILTER_PROMPTS)}"
-    )
+    print("[INFO] FILTER_PROMPTS：" f"{list(FILTER_PROMPTS)}")
 
-    print(
-        "[INFO] 筛选条件："
-        "(y_min + y_max) / 2 < image_height / 2"
-    )
+    print("[INFO] 筛选条件：" "(y_min + y_max) / 2 < image_height / 2")
 
-    print(
-        "[INFO] 满足条件的目标将被过滤"
-    )
+    print("[INFO] 满足条件的目标将被过滤")
 
     print("=" * 80)
 
@@ -1340,19 +1043,13 @@ def main():
 
     image_paths = load_image_paths()
 
-    total_count = len(
-        image_paths
-    )
+    total_count = len(image_paths)
 
-    print(
-        f"[INFO] 共读取 {total_count} 张图片"
-    )
+    print(f"[INFO] 共读取 {total_count} 张图片")
 
     if total_count == 0:
 
-        print(
-            "[WARNING] 没有需要处理的图片"
-        )
+        print("[WARNING] 没有需要处理的图片")
 
         return
 
@@ -1360,23 +1057,15 @@ def main():
     # 创建输出目录
     # --------------------------------------------------------
 
-    LABEL_OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    LABEL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # --------------------------------------------------------
     # 读取已有 Info
     # --------------------------------------------------------
 
-    existing_label_paths = (
-        load_existing_label_paths()
-    )
+    existing_label_paths = load_existing_label_paths()
 
-    print(
-        f"[INFO] Info 文件中已有 "
-        f"{len(existing_label_paths)} 条记录"
-    )
+    print(f"[INFO] Info 文件中已有 " f"{len(existing_label_paths)} 条记录")
 
     # --------------------------------------------------------
     # 创建 SAM3 Predictor
@@ -1388,9 +1077,7 @@ def main():
     # 提前加载模型
     # --------------------------------------------------------
 
-    warmup_predictor(
-        predictor
-    )
+    warmup_predictor(predictor)
 
     # --------------------------------------------------------
     # 统计
@@ -1405,31 +1092,20 @@ def main():
     # 打开 Info 文件
     # --------------------------------------------------------
 
-    with INFO_OUTPUT_FILE.open(
-        "a",
-        encoding="utf-8"
-    ) as info_file:
+    with INFO_OUTPUT_FILE.open("a", encoding="utf-8") as info_file:
 
         # ----------------------------------------------------
         # 顺序处理
         # ----------------------------------------------------
 
-        for index, image_path in enumerate(
-            image_paths,
-            start=1
-        ):
+        for index, image_path in enumerate(image_paths, start=1):
 
             print("\n")
             print("-" * 80)
 
-            print(
-                f"[{index}/{total_count}] "
-                f"开始处理"
-            )
+            print(f"[{index}/{total_count}] " f"开始处理")
 
-            print(
-                f"[IMAGE] {image_path}"
-            )
+            print(f"[IMAGE] {image_path}")
 
             # ------------------------------------------------
             # 每隔 100 张打印一次显存
@@ -1437,24 +1113,16 @@ def main():
 
             if index % 100 == 0:
 
-                print_gpu_memory(
-                    prefix=f"处理 {index} 张之后"
-                )
+                print_gpu_memory(prefix=f"处理 {index} 张之后")
 
             # ------------------------------------------------
             # 单张图片处理
             # ------------------------------------------------
 
-            (
-                label_path,
-                detected_prompts,
-                status
-            ) = process_one_image_with_retry(
+            (label_path, detected_prompts, status) = process_one_image_with_retry(
                 predictor=predictor,
                 image_path=image_path,
-                existing_label_paths=(
-                    existing_label_paths
-                ),
+                existing_label_paths=(existing_label_paths),
                 max_retries=1,
             )
 
@@ -1466,19 +1134,13 @@ def main():
 
                 success_count += 1
 
-                prompt_info = ",".join(
-                    detected_prompts
-                )
+                prompt_info = ",".join(detected_prompts)
 
-                info_file.write(
-                    f"{label_path}:{prompt_info}\n"
-                )
+                info_file.write(f"{label_path}:{prompt_info}\n")
 
                 info_file.flush()
 
-                existing_label_paths.add(
-                    str(label_path)
-                )
+                existing_label_paths.add(str(label_path))
 
             # ------------------------------------------------
             # 已存在
@@ -1509,10 +1171,7 @@ def main():
             # ------------------------------------------------
 
             processed_count = (
-                success_count
-                + skip_count
-                + no_target_count
-                + failed_count
+                success_count + skip_count + no_target_count + failed_count
             )
 
             print(
@@ -1533,42 +1192,21 @@ def main():
     print("SAM3 批量自动标注完成")
     print("=" * 80)
 
-    print(
-        f"[RESULT] 总图片数："
-        f"{total_count}"
-    )
+    print(f"[RESULT] 总图片数：" f"{total_count}")
 
-    print(
-        f"[RESULT] 成功生成 Label："
-        f"{success_count}"
-    )
+    print(f"[RESULT] 成功生成 Label：" f"{success_count}")
 
-    print(
-        f"[RESULT] 已存在跳过："
-        f"{skip_count}"
-    )
+    print(f"[RESULT] 已存在跳过：" f"{skip_count}")
 
-    print(
-        f"[RESULT] 无有效目标："
-        f"{no_target_count}"
-    )
+    print(f"[RESULT] 无有效目标：" f"{no_target_count}")
 
-    print(
-        f"[RESULT] 处理失败："
-        f"{failed_count}"
-    )
+    print(f"[RESULT] 处理失败：" f"{failed_count}")
 
     print("-" * 80)
 
-    print(
-        f"[RESULT] Label 目录："
-        f"{LABEL_OUTPUT_DIR}"
-    )
+    print(f"[RESULT] Label 目录：" f"{LABEL_OUTPUT_DIR}")
 
-    print(
-        f"[RESULT] Info 文件："
-        f"{INFO_OUTPUT_FILE}"
-    )
+    print(f"[RESULT] Info 文件：" f"{INFO_OUTPUT_FILE}")
 
     print("=" * 80)
 
@@ -1578,10 +1216,7 @@ def main():
 # ============================================================
 
 # SAM3 模型
-MODEL_PATH = (
-    "/data/Sam3-yolo-distill-ultralytics/"
-    "Sam3-yolo-distill/models/sam3.pt"
-)
+MODEL_PATH = "/data/Sam3-yolo-distill-ultralytics/" "Sam3-yolo-distill/models/sam3.pt"
 
 # SAM3 BPE tokenizer
 BPE_PATH = (
@@ -1591,8 +1226,7 @@ BPE_PATH = (
 
 # 图片路径列表
 TOTAL_IMAGES_INFO = Path(
-    "/data/database/aws_origin_sample/images/"
-    "total_images_path_info.txt"
+    "/data/database/aws_origin_sample/images/" "total_images_path_info.txt"
 )
 
 # ============================================================
@@ -1604,18 +1238,26 @@ TEXT_PROMPTS = [
     "rug or carpet",
     "Cables or wires on the ground",
     "Plastic sheets or plastic bags on the ground",
-    "Liquid stains on the ground"
+    "Liquid stains on the ground",
 ]
 
 # 是否跳过已经存在的 Label
 SKIP_EXISTING_LABEL = True
 
 # SAM3 confidence
-CONF = 0.25
+"""
+0.25 → 当前
+0.35 → 比较温和
+0.40 → 可以重点测试
+0.50 → 比较严格
+0.60 → 非常严格
+"""
+CONF = 0.40
 
 
 # ============================================================
 # 需要进行目标结构筛选的 Prompt
+# 以下目标用于过滤，目标只出现在图片上半部分的 Mask 将被过滤掉。
 # ============================================================
 
 FILTER_PROMPTS = {
@@ -1630,21 +1272,12 @@ FILTER_PROMPTS = {
 # 输出路径
 # ============================================================
 
-LABEL_OUTPUT_DIR = (
-    TOTAL_IMAGES_INFO.parent
-    / "Sam3_auto_labels"
-)
+LABEL_OUTPUT_DIR = TOTAL_IMAGES_INFO.parent / "Sam3_auto_labels"
 
-prompt_string = "_".join(
-    TEXT_PROMPTS
-)
+prompt_string = "_".join(TEXT_PROMPTS)
 
-INFO_OUTPUT_FILE = (
-    TOTAL_IMAGES_INFO.parent
-    / (
-        f"total_{prompt_string}"
-        f"_Sam3_auto_labels_save_info.txt"
-    )
+INFO_OUTPUT_FILE = TOTAL_IMAGES_INFO.parent / (
+    f"total_{prompt_string}" f"_Sam3_auto_labels_save_info.txt"
 )
 
 
